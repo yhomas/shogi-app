@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>エンジン確認</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 12px; }
+  h1 { font-size: 16px; }
+  #result { font-size: 14px; line-height: 1.8; }
+  .ok { color: #0a6b0a; }
+  .ng { color: #a01010; }
+  pre { background: #f4f4f4; padding: 8px; max-height: 300px; overflow: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>エンジン確認</h1>
+<div id="result">実行中…</div>
+<pre id="log"></pre>
+
+<script type="module">
+// 開発用の確認ページ。serve.py で開く。
+//   http://127.0.0.1:8000/tools/engine-check.html
+// Firebase へは配信しない（firebase.json の ignore で除外している）。
+import { createEngine, guardCrossOriginIsolation } from "../js/usi-engine.js";
+import { createInitialPosition } from "../js/state.js";
+import { boardToSfen } from "../js/coords.js";
+
+const resultEl = document.getElementById("result");
+const logEl = document.getElementById("log");
+const lines = [];
+const result = { steps: [] };
+
+function note(name, value) {
+  result.steps.push({ name, value });
+  const row = document.createElement("div");
+  row.textContent = `${name}: ${value}`;
+  resultEl.appendChild(row);
+}
+
+const guard = guardCrossOriginIsolation();
+result.isolated = guard.ok;
+if (!guard.ok) {
+  note("分離の判定", guard.message);
+  resultEl.className = "ng";
+  result.done = true;
+  window.__result = result;
+  window.__done = true;
+} else {
+  note("分離の判定", "ok（cross-origin isolated）");
+
+  const startSfen = boardToSfen(createInitialPosition());
+  note("初期局面のSFEN", startSfen);
+
+  const engine = await createEngine({
+    onLine: (line) => {
+      lines.push(line);
+      logEl.textContent += line + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    },
+    threads: 1,
+    hashMb: 32,
+  });
+
+  note("id name", engine.idName);
+
+  // 深さ6で指させる
+  engine.setPositionSfen(startSfen);
+  const bestmove = await engine.goDepth(6);
+  note("初期局面の bestmove（深さ6）", bestmove);
+  result.bestmove = bestmove;
+
+  // 合法手の数。MultiPV を大きくして深さ1で数える。
+  lines.length = 0;
+  engine.setOption("MultiPV", 100);
+  engine.setPositionSfen(startSfen);
+  await engine.goDepth(1);
+  const multipv = new Set();
+  for (const line of lines) {
+    const m = line.match(/\bmultipv (\d+)/);
+    if (m) multipv.add(m[1]);
+  }
+  note("初期局面の合法手の数", multipv.size);
+  result.legalMoves = multipv.size;
+
+  engine.quit();
+  result.done = true;
+  window.__result = result;
+  window.__done = true;
+}
+</script>
+</body>
+</html>
