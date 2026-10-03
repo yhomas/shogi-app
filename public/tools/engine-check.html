@@ -89,6 +89,21 @@ if (!guard.ok) {
   result.perftFromFen = nodesFromFen;
   result.perftFromMoves = nodesFromMoves;
 
+  // 終局（合法手が無い局面）でエンジンが何を返すかを実測する。
+  // 5一の後手玉を、5二と6二の先手金で詰ませた形。
+  const mateSfen = "4k4/3GG4/9/9/9/9/9/9/9[-] b 0 1";
+  engine.setPositionSfen(mateSfen);
+  const mateNodes = await engine.goPerft(1);
+  note("詰み局面の合法手の数", mateNodes);
+
+  lines.length = 0;
+  engine.setPositionSfen(mateSfen);
+  const mateBestmove = await engine.goDepth(5);
+  note("詰み局面の bestmove", JSON.stringify(mateBestmove));
+  note("詰み局面の生の出力", JSON.stringify(lines.filter((l) => l.startsWith("bestmove"))));
+  result.mateNodes = mateNodes;
+  result.mateBestmove = mateBestmove;
+
   engine.quit();
   result.done = true;
   window.__result = result;

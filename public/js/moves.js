@@ -37,6 +37,29 @@ export function destinationsFrom(moves, from) {
   return destinations;
 }
 
+/**
+ * 指そうとしている行き先に対応する手を、合法手の一覧から決める。
+ * 成る手と成らない手の両方が合法なときだけ、本人に選んでもらう必要がある。
+ * @param {string[]} moves エンジンが返した合法手
+ * @param {string} from マス（例 "e8"）または持ち駒（例 "P@"）
+ * @param {string} to 行き先のマス（例 "e9"）
+ * @returns {{move: string|null, needsPromotionChoice: boolean, plain?: string, promoted?: string}|null}
+ *   合法な手が無ければ null
+ */
+export function resolveMove(moves, from, to) {
+  const plain = `${from}${to}`;
+  const promoted = `${plain}+`;
+  const hasPlain = moves.includes(plain);
+  const hasPromoted = moves.includes(promoted);
+
+  if (hasPlain && hasPromoted) {
+    return { move: null, needsPromotionChoice: true, plain, promoted };
+  }
+  if (hasPromoted) return { move: promoted, needsPromotionChoice: false };
+  if (hasPlain) return { move: plain, needsPromotionChoice: false };
+  return null;
+}
+
 function cloneHands(hands) {
   return {
     w: { ...hands.w },

@@ -82,3 +82,52 @@ body {
 @keyframes blink {
   50% { opacity: 0; }
 }
+
+/* 画面の骨 */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.turn { font-weight: 700; }
+
+.depth input {
+  width: 4em;
+  font-size: 14px;
+  padding: 2px 4px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid #b9a071;
+  border-radius: 4px;
+  background: #fdf6e6;
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.45; cursor: default; }
+
+.hand {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 34px;
+  font-size: 13px;
+  color: #666;
+}
+
+.hand-piece {
+  padding: 4px 8px;
+  min-width: 44px;
+  min-height: 32px;
+}
+
+.hand-piece.clickable { background: #eaf1fb; border-color: #7d9ad0; }
+
+.hand-piece.selected { box-shadow: inset 0 0 0 2px #d08a00; }
+
+.message { min-height: 1.5em; font-size: 14px; color: #a01010; }

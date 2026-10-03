@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { destinationsFrom, applyMove, isDrop, isPromotion } from "../public/js/moves.js";
+import { destinationsFrom, applyMove, isDrop, isPromotion, resolveMove } from "../public/js/moves.js";
 import { createInitialPosition, emptyHands, boardIndex } from "../public/js/state.js";
 import { boardToSfen } from "../public/js/coords.js";
 
@@ -82,4 +82,37 @@ test("▲７六歩 △３四歩 の局面が仕様の SFEN と一致する", () 
     boardToSfen(position),
     "lnsgkgsnl/1r5b1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL[-] w 0 1",
   );
+});
+
+test("resolveMove: 成る手しか無いときは成る（歩が最後の段など）", () => {
+  assert.deepEqual(resolveMove(["e8e9+"], "e8", "e9"), {
+    move: "e8e9+",
+    needsPromotionChoice: false,
+  });
+});
+
+test("resolveMove: 成らない手しか無いときは成らない", () => {
+  assert.deepEqual(resolveMove(["c3c4"], "c3", "c4"), {
+    move: "c3c4",
+    needsPromotionChoice: false,
+  });
+});
+
+test("resolveMove: どちらも選べるときは本人に選んでもらう", () => {
+  const choice = resolveMove(["e8e9", "e8e9+"], "e8", "e9");
+  assert.equal(choice.needsPromotionChoice, true);
+  assert.equal(choice.plain, "e8e9");
+  assert.equal(choice.promoted, "e8e9+");
+});
+
+test("resolveMove: 合法でない行き先は null", () => {
+  assert.equal(resolveMove(["c3c4"], "c3", "c5"), null);
+  assert.equal(resolveMove([], "c3", "c4"), null);
+});
+
+test("resolveMove: 打つ手も同じ仕組みで決まる", () => {
+  assert.deepEqual(resolveMove(["P@e5"], "P@", "e5"), {
+    move: "P@e5",
+    needsPromotionChoice: false,
+  });
 });
