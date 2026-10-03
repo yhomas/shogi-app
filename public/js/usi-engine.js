@@ -149,6 +149,10 @@ export async function createEngine({ url = DEFAULT_ENGINE_URL, onLine, threads, 
     idName,
     setOption,
     isReady,
+    // 出力行を後から購読する。戻り値を呼ぶと購読をやめる。
+    subscribe(listener) {
+      return router.subscribe(listener);
+    },
     setPositionSfen(sfen) {
       send(`position fen ${sfen}`);
     },
@@ -165,6 +169,19 @@ export async function createEngine({ url = DEFAULT_ENGINE_URL, onLine, threads, 
         `エンジンが深さ${depth}の手を返しませんでした。`,
       );
       return line.split(/\s+/)[1] ?? "";
+    },
+    // 合法手を漏れなく数えるための perft。探索したノード数を返す。
+    // 各手と本数は subscribe した listener に「c3c4: 1」の形で届く。
+    // MultiPV を使う方法と違い、手数の上限（500）に縛られない。
+    async goPerft(depth) {
+      const done = router.waitFor((line) => line.startsWith("Nodes searched"));
+      send(`go perft ${depth}`);
+      const line = await withTimeout(
+        done,
+        SEARCH_TIMEOUT_MS,
+        `perft ${depth} が終わりませんでした。`,
+      );
+      return Number(line.replace(/[^0-9]/g, ""));
     },
     stop() {
       send("stop");

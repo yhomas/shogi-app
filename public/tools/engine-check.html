@@ -22,6 +22,7 @@
 //   http://127.0.0.1:8000/tools/engine-check.html
 // Firebase へは配信しない（firebase.json の ignore で除外している）。
 import { createEngine, guardCrossOriginIsolation } from "../js/usi-engine.js";
+import { enumerateLegalMoves, applyMove } from "../js/moves.js";
 import { createInitialPosition } from "../js/state.js";
 import { boardToSfen } from "../js/coords.js";
 
@@ -69,18 +70,24 @@ if (!guard.ok) {
   note("初期局面の bestmove（深さ6）", bestmove);
   result.bestmove = bestmove;
 
-  // 合法手の数。MultiPV を大きくして深さ1で数える。
-  lines.length = 0;
-  engine.setOption("MultiPV", 100);
-  engine.setPositionSfen(startSfen);
-  await engine.goDepth(1);
-  const multipv = new Set();
-  for (const line of lines) {
-    const m = line.match(/\bmultipv (\d+)/);
-    if (m) multipv.add(m[1]);
-  }
-  note("初期局面の合法手の数", multipv.size);
-  result.legalMoves = multipv.size;
+  // 合法手の列挙（perft 1 を土台にしている）
+  const legal = await enumerateLegalMoves(engine, createInitialPosition());
+  note("初期局面の合法手の数", legal.length);
+  result.legalMoves = legal.length;
+  result.hasSampleMoves = ["c3c4", "a1a2", "h2c2"].every((m) => legal.includes(m));
+
+  // perft の突き合わせ。同じ局面を2通りで渡してノード数が一致するか。
+  const afterTwoMoves = applyMove(applyMove(createInitialPosition(), "c3c4"), "g7g6");
+  const sfenFromMoves = boardToSfen(afterTwoMoves);
+  engine.setPositionSfen(sfenFromMoves);
+  const nodesFromFen = await engine.goPerft(3);
+  engine.setPositionMoves(["c3c4", "g7g6"]);
+  const nodesFromMoves = await engine.goPerft(3);
+  note("perft 3（position fen）", nodesFromFen);
+  note("perft 3（startpos moves）", nodesFromMoves);
+  note("2通りの局面が同じか", nodesFromFen === nodesFromMoves ? "一致" : "不一致");
+  result.perftFromFen = nodesFromFen;
+  result.perftFromMoves = nodesFromMoves;
 
   engine.quit();
   result.done = true;
