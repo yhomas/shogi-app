@@ -7,7 +7,38 @@
 <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
+<div class="app">
+<div class="controls">
+<label for="attack-mode">利きの表示</label>
+<select id="attack-mode">
+<option value="both" selected>自分と相手</option>
+<option value="mine">自分だけ</option>
+<option value="opp">相手だけ</option>
+<option value="none">表示しない</option>
+</select>
+</div>
 <div id="board"></div>
-<script type="module" src="./js/main.js"></script>
+</div>
+<script type="module">
+// 一時的な起動。盤面と利きだけを描く（Task 11 で main.js に置き換える）。
+import { createInitialPosition } from "./js/state.js";
+import { countAttacks } from "./js/attack-map.js";
+import { renderBoard } from "./js/board.js";
+
+const position = createInitialPosition();
+const attacks = countAttacks(position);
+const boardEl = document.getElementById("board");
+const modeEl = document.getElementById("attack-mode");
+
+function draw() {
+  renderBoard(boardEl, position, { attacks, mode: modeEl.value, mySide: "w" });
+}
+
+modeEl.addEventListener("change", draw);
+draw();
+
+// ブラウザでの確認用（テストから読む）
+window.__app = { position, attacks, draw };
+</script>
 </body>
 </html>
