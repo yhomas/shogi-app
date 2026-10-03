@@ -137,3 +137,40 @@ button:disabled { opacity: 0.45; cursor: default; }
 .kif input[type="range"] { width: 160px; }
 
 .hint { font-size: 13px; color: #446; min-height: 1.5em; }
+
+/* 指す前の確認パネル */
+.panel {
+  border: 2px solid #d08a00;
+  background: #fffdf5;
+  padding: 10px;
+  max-width: 560px;
+}
+
+.panel h2 { font-size: 15px; margin: 0 0 6px; }
+
+.check-list, .item-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.check-list li { padding: 4px 0; }
+
+.check-list label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+
+.item-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.high { font-weight: 700; color: #a01010; }
+
+.settings { max-width: 640px; font-size: 14px; }
+
+.settings summary { cursor: pointer; padding: 4px 0; }
+
+.settings .bar { margin: 4px 0; }

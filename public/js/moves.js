@@ -129,18 +129,20 @@ export function applyMove(position, move) {
  */
 export async function replayMoves(engine, startPosition, moves, upto = moves.length) {
   let position = startPosition;
+  let previousPosition = startPosition;
   const limit = Math.max(0, Math.min(upto, moves.length));
 
   for (let index = 0; index < limit; index += 1) {
     const move = moves[index];
     const legal = await enumerateLegalMoves(engine, position);
     if (!legal.includes(move)) {
-      return { position, invalidAtIndex: index, move, legal };
+      return { position, previousPosition, invalidAtIndex: index, move, legal };
     }
+    previousPosition = position;
     position = applyMove(position, move);
   }
 
-  return { position, invalidAtIndex: -1 };
+  return { position, previousPosition, invalidAtIndex: -1 };
 }
 
 /**

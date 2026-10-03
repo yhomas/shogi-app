@@ -48,6 +48,40 @@
 
   <div class="message" id="message"></div>
 
+  <section class="panel" id="check-panel" hidden>
+    <h2>指す前に確認</h2>
+    <p class="hint" id="check-move"></p>
+    <ul class="check-list" id="check-list"></ul>
+    <div class="bar">
+      <button id="check-play" type="button" disabled>指す</button>
+      <button id="check-cancel" type="button">この手をやめる</button>
+    </div>
+  </section>
+
+  <details class="settings">
+    <summary>チェック項目の登録</summary>
+    <div class="bar">
+      <input id="item-text" type="text" placeholder="確認する内容（例: 飛車角を動かしていないか）" size="30">
+      <select id="item-condition"></select>
+    </div>
+    <div class="bar">
+      <label>piece <input id="item-piece" type="text" placeholder="rook_bishop" size="12"></label>
+      <label>squares <input id="item-squares" type="text" placeholder="a1,b2" size="10"></label>
+      <label>count <input id="item-count" type="number" min="0" size="3"></label>
+      <label>ply <input id="item-ply" type="number" min="0" size="3"></label>
+      <label>優先度
+        <select id="item-priority">
+          <option value="high">高</option>
+          <option value="normal" selected>中</option>
+          <option value="low">低</option>
+        </select>
+      </label>
+      <button id="item-add" type="button">追加</button>
+    </div>
+    <p class="hint" id="item-status"></p>
+    <ul class="item-list" id="item-list"></ul>
+  </details>
+
 </div>
 <script type="module" src="./js/main.js"></script>
 </body>
