@@ -1,0 +1,28 @@
+:root {
+  --board-line: #7a5a34;
+  --board-bg: #f0e0c0;
+  --square-line: #c8b48c;
+  --mine: 60, 120, 220;
+  --opp: 220, 60, 60;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 8px;
+  font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+  color: #222;
+}
+
+.notfound { padding: 24px; }
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  border: 3px solid var(--board-line);
+  background: var(--board-bg);
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 1 / 1;
+}
