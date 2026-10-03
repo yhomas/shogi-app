@@ -30,6 +30,10 @@
 |---|---|---|
 | kif再現後の扱い | **再現した局面からもAIと対戦できる** | 通常対局と同じエンジンを使う。練習モードと検討モードの両方が使える |
 | ブラウザ構成 | **A**: 依存ゼロ。素のHTML + ES modules + WASM | ビルド不要 |
+| 配信先 | **Firebase Hosting** | `firebase.json` の `headers` で COOP/COEP を設定する |
+| エンジンの配置 | **同一オリジンに同梱**（`public/engine/`） | Worker が同一オリジンでないと動かないため、CDN からの読み込みは行わない |
+| データの保存 | **端末内のみ**（localStorage） | 棋譜は保存しない。チェック項目だけ保存する |
+| Firebase プロジェクト | **新規に作成する** | 作成はユーザーの Google アカウントで行う |
 | チェック項目の表示タイミング | **指す前のみ** | 駒を掴んだ時に判定し、確認してから指す |
 | 利きの表示 | **両サイド常時表示**（既定ON） | 表示の切り替えも用意する |
 | 自駒がいるマスの利き | **数える**（守りの強さとして表示） | 飛び駒は最初にぶつかった駒のマスまで数えて止まる |
@@ -50,7 +54,7 @@
 
 ### 2.1 採用エンジン
 
-`fairy-stockfish-nnue.wasm`（npmパッケージ `fairy-stockfish-nnue.wasm`、バージョン 1.1.12、ライセンス GPL-3.0）をCDNから取得する。
+`fairy-stockfish-nnue.wasm`（npmパッケージ `fairy-stockfish-nnue.wasm`、バージョン 1.1.12、ライセンス GPL-3.0）からエンジンの3ファイルを取得し、アプリに同梱して配信する（附録C）。
 
 | 検証項目 | 実測結果 |
 |---|---|
@@ -77,7 +81,9 @@ Cross-Origin-Embedder-Policy: require-corp
 Cross-Origin-Opener-Policy: same-origin
 ```
 
-GitHub Pages と Cloudflare Pages はリポジトリ直下の `_headers`、Vercel は `vercel.json` に記述する。
+配信先は Firebase Hosting とし、`firebase.json` の `headers` で設定する（詳細は附録C）。
+
+**エンジンは同一オリジンに置く。** COEP `require-corp` の下では `crossorigin` 属性のないクロスオリジンの `<script>` がブロックされる。さらに決定的なのは、**`new Worker()` がクロスオリジンの URL を受け付けない**ことである。このエンジンは pthread ビルドで内部から `stockfish.worker.js` を Worker として読み込むため、ワーカースクリプトが同一オリジンにないと動かない。したがってエンジンの3ファイル（`stockfish.js`、`stockfish.wasm`、`stockfish.worker.js`）は `public/engine/` に同梱して配信する。
 
 **重要**: 素の `python3 -m http.server` はこのヘッダーを送らないため、開発中もエンジンが起動しない。ヘッダーを付与する専用の開発サーバースクリプト（`serve.py`）を用意する。
 
@@ -179,7 +185,7 @@ engineRank = 10 - kifの段番号（漢数字を数値に）
 - `go depth N` による強さ設定は機能するが、強さの上限はブラウザ実行の範囲に収まる。
 - 本アプリの目的は終盤の練習であり、絶対的な強さは主目的ではない。
 
-将来、CDNから入手できるNNUE評価ファイルがあれば `EvalFile` に渡して強化できる。これはスコープ外とする。
+将来、NNUE評価ファイルを入手できた場合は、これも同梱して `EvalFile` に渡すことで強化できる。これはスコープ外とする。
 
 ### 2.6 任意局面の読み込み（kif局面から対戦するため）
 
@@ -225,24 +231,33 @@ kifから再現した終盤局面でAIと対戦するためには、任意の局
 
 ```
 shogi-app/
-├── index.html              エントリ
-├── _headers                COOP/COEP ヘッダー定義（GitHub Pages / Cloudflare Pages 用）
-├── vercel.json             COOP/COEP ヘッダー定義（Vercel 用）
-├── serve.py                開発用サーバー（ヘッダー付き）
-├── css/
-│   └── style.css           レスポンシブ（スマホ縦持ち優先）
-├── js/
-│   ├── main.js             起動と状態機械、UIの配線
-│   ├── state.js            局面状態、手履歴、undo/redo、localStorage
-│   ├── usi-engine.js       エンジン制御（USI送受信、起動、設定）
-│   ├── coords.js           座標変換（FEN ↔ エンジン ↔ 画面 ↔ kif）
-│   ├── board.js            盤面データとDOM描画
-│   ├── moves.js            指し手の合法性確認（エンジン照合）とエンジン記法の生成
-│   ├── attack-map.js       利き数の計算（R3）
-│   ├── kif-parser.js       kif解析（R4）
-│   └── checklist.js        チェック項目のCRUDと条件評価（R5/R6）
-├── vendor/                 エンジンWASMの同梱用（フォールバック）
-└── docs/superpowers/specs/ 本仕様書
+├── firebase.json           Firebase Hosting の設定（COOP/COEP ヘッダーを含む）
+├── .firebaserc             プロジェクトID
+├── serve.py                ローカル開発用サーバー（COOP/COEP ヘッダー付き）
+├── public/                 ← Firebase Hosting が配信するディレクトリ
+│   ├── index.html          エントリ
+│   ├── 404.html            Firebase Hosting の 404 ページ
+│   ├── css/
+│   │   └── style.css       レスポンシブ（スマホ縦持ち優先）
+│   ├── js/
+│   │   ├── main.js         起動と状態機械、UIの配線
+│   │   ├── state.js        局面状態、手履歴、undo/redo、localStorage
+│   │   ├── usi-engine.js   エンジン制御（USI送受信、起動、設定）
+│   │   ├── coords.js       座標変換（FEN ↔ エンジン ↔ 画面 ↔ kif）とSFEN生成
+│   │   ├── board.js        盤面データとDOM描画
+│   │   ├── moves.js        指し手の合法性確認（エンジン照合）とエンジン記法の生成
+│   │   ├── attack-map.js   利き数の計算（R3）
+│   │   ├── kif-parser.js   kif解析（R4）
+│   │   └── checklist.js    チェック項目のCRUDと条件評価（R5/R6）
+│   └── engine/             エンジン本体（同一オリジンに同梱）
+│       ├── stockfish.js
+│       ├── stockfish.wasm
+│       ├── stockfish.worker.js
+│       └── COPYING.txt     GPL-3.0 のライセンス原文
+├── docs/
+│   ├── superpowers/specs/  本仕様書
+│   └── mockups/            設計確認用のモックアップ
+└── tools/                  開発補助（テスト用ページ、perft の突き合わせなど）
 ```
 
 ### 3.2 責務の分離
@@ -251,7 +266,7 @@ shogi-app/
 
 | ファイル | 責務 | 依存 |
 |---|---|---|
-| `coords.js` | 座標変換のみ。状態を持たない純粋関数 | なし |
+| `coords.js` | 座標変換とSFEN生成。状態を持たない純粋関数 | なし |
 | `attack-map.js` | 盤面配列から各マスの利き数（両サイド）を数えるのみ | なし（盤面配列を受け取る） |
 | `usi-engine.js` | エンジンの起動、コマンド送受信、非同期API | なし |
 | `moves.js` | 指し手の合法性をエンジン照合で確認し、エンジン記法に変換 | `usi-engine`, `coords` |
@@ -293,12 +308,9 @@ kifファイル ──kif-parser──> 手列（エンジン記法）──usi-
 
 #### エンジンの読み込み
 
-CDNから `stockfish.js`、`stockfish.wasm`、`stockfish.worker.js` を取得する。取得先は次の順に試す。
+同一オリジンの `engine/stockfish.js` を `<script>` で読み込む（`public/engine/` に同梱。附録C）。CDN や他のオリジンからは読み込まない。
 
-1. jsDelivr のCDN
-2. 失敗した場合は `vendor/` に同梱したファイル
-
-両方失敗した場合は「エンジンを読み込めませんでした」と画面に表示し、`index.html` の `engineBaseUrl` を変更する手順を示す。
+読み込みに失敗した場合は「エンジンを読み込めませんでした」と画面に表示し、`public/engine/` に3ファイルが揃っているかを確認する手順を示す。
 
 `crossOriginIsolated` が `false` の場合は、エンジンの読み込みを試みる前に警告を表示する。「このアプリは COOP/COEP ヘッダーが必要です。ホスティングの設定を確認してください」。
 
@@ -672,11 +684,13 @@ kifを適用した結果の局面から**SFENを組み立てて `position fen <S
 
 | リスク | 影響 | 対策 |
 |---|---|---|
-| COOP/COEP ヘッダーが未設定 | エンジンが起動しない | 起動前チェックで明示的な警告を出す。`serve.py`、`_headers`、`vercel.json` を用意する |
-| CDNの障害 | エンジンを取得できない | `vendor/` に同梱したファイルへフォールバックする |
+| COOP/COEP ヘッダーが未設定 | エンジンが起動しない | 起動前チェックで明示的な警告を出す。`firebase.json` の `headers` と、ローカル用の `serve.py` を用意する |
+| Node.js が無い | デプロイできない | Homebrew で導入する（`brew install node`。20以上が必要）。導入前でも `serve.py` でローカル確認はできる |
+| `firebase login` がブラウザ認証を要する | 自動化できない | 本人の操作が必要な唯一の手順として明示する。それ以外は自動で行う |
+| WASM が約1.6MB | 初回の読み込みが遅い | `Cache-Control` を長めに設定する。ローディングを表示し、先に盤面を描画する |
 | 評価が古典評価 | 強さが限定的 | 節2.5のとおり明記し、UIにも注記する |
 | `Hash` の過大指定 | WASMメモリの確保に失敗 | 256MBに制限する。`navigator.deviceMemory` で端末に応じて既定値を変える |
-| 初期化に時間がかかる | 操作できない時間が生じる | ローディングを表示し、先に初期局面を描画してからエンジンを待つ |
+| `Config` を誤るとヘッダーが付かない | エンジンが起動しない | デプロイ後に `curl -I` で `cross-origin-embedder-policy` を確認する手順を設ける |
 | タッチ端末での誤操作 | 意図しない駒を動かす | タップ領域を44px確保する。駒の選択と行き先の指定を2段階にする |
 | kifの非標準な表記 | パースに失敗する | 行番号付きのエラー表示でスキップし、処理を続ける |
 
@@ -698,12 +712,13 @@ kifを適用した結果の局面から**SFENを組み立てて `position fen <S
 ### 8.2 明示的なスコープ外
 
 - ネット対戦（他プレイヤーとの通信）
-- 棋譜のデータベース化と検索
+- 棋譜の保存・データベース化・検索（Firestore などのクラウド保存は行わない。チェック項目だけを端末内に保存する）
 - 定跡（序盤の定跡データ）の組み込み
-- 対局の保存と再開
+- 対局の再開（保存した対局を読み戻す機能）
 - 詰将棋や次の一手の問題集
 - モバイルネイティブアプリ
 - NNUE評価ファイルの組み込み（節2.5）
+- Cloud Functions（すべてブラウザ内で完結するため不要）
 
 ---
 
@@ -711,7 +726,7 @@ kifを適用した結果の局面から**SFENを組み立てて `position fen <S
 
 | Phase | 内容 | 依存 |
 |---|---|---|
-| 1 | HTMLシェル、CSSレイアウト（ダミー盤面）、`serve.py`、`_headers`、`vercel.json` | — |
+| 1 | HTMLシェル、CSSレイアウト（ダミー盤面）、`serve.py`、`firebase.json`、エンジン3ファイルの配置 | — |
 | 2 | `coords.js` 座標変換（FEN ↔ エンジン ↔ 画面 ↔ kif）とSFEN生成 | 1 |
 | 3 | `usi-engine.js` エンジン制御（USI送受信、起動、設定） | 1 |
 | 4 | `board.js` 盤面描画、`moves.js` 合法性確認、指し手入力 | 2, 3 |
@@ -720,20 +735,22 @@ kifを適用した結果の局面から**SFENを組み立てて `position fen <S
 | 7 | `checklist.js` チェック項目のCRUD、条件評価、表示 | 2, 4 |
 | 8 | 強さ設定UI、評価値と候補手の表示、検討モード | 3, 4 |
 | 9 | レスポンシブ調整、エラー処理、仕上げ | 全Phase |
+| 10 | Firebase プロジェクトの作成、デプロイ、ヘッダーの確認 | 1〜9 |
 
 ---
 
-## 10. 未解決の質問
+## 10. 残っている確認事項
 
-### 10.1 棋譜の保存
-
-初回の要件に「ブラウザで打つ → 結果を保存」があった。最小実装では「その場で指す」までに留め、棋譜の永続化はスコープ外とした。必要であれば Phase 10 として追加する。
-
-### 10.2 チェック項目の初期セット
+### 10.1 チェック項目の初期セット
 
 節4.4のとおり、初期項目は用意せず空の状態で開始する方針とした。既定の項目セットを入れたい場合は指示がほしい。
 
-（自駒がいるマスを利き数に数えるかは、節1.3のとおり「数える」で確定した。）
+### 10.2 確定した項目（参考）
+
+- 棋譜の保存: **端末内のみ。棋譜は保存しない**（節1.3）。初回の要望にあった「結果を保存」は、チェック項目の保存までを行う。
+- 自駒がいるマスの利き: **数える**（節1.3）。
+- kif再現局面からの対戦: **行う**（節1.3）。
+- 配信先: **Firebase Hosting**、エンジンは同一オリジンに同梱（節1.3、附録C）。
 
 ---
 
@@ -825,17 +842,87 @@ g1g2 g3g4 h2c2 h2d2 h2e2 h2f2 h2g2 h2i2 h3h4 i1i2 i3i4
 
 ---
 
-## 附録C: 配信上の必須事項
+## 附録C: Firebase Hosting への配信
 
-1. **COOP/COEP ヘッダー**（最優先）
+### C.1 必須ヘッダー（最優先）
 
-   ```
-   Cross-Origin-Embedder-Policy: require-corp
-   Cross-Origin-Opener-Policy: same-origin
-   ```
+```
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+```
 
-   ホスティング先ごとに `_headers`（GitHub Pages、Cloudflare Pages）または `vercel.json`（Vercel）で指定する。`python3 -m http.server` はこのヘッダーを送らないため、開発時は `serve.py` を使う。
+`firebase.json` に次のように書く。`source` は `**` で全ファイルに適用する。
 
-2. **CDN利用時のCORS**: jsDelivr は `Access-Control-Allow-Origin: *` を返す（実測済み）。ワーカースクリプトの読み込みに支障はない。
+```json
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
+        ]
+      }
+    ]
+  }
+}
+```
 
-3. **ライセンス**: Fairy-Stockfish は GPL-3.0。アプリ内に GPL-3.0 の表示を含める。`vendor/` に同梱する場合も同様とする。
+`public` は `public` ディレクトリを指定する（3.1 の構成に対応）。
+
+### C.2 エンジンは同一オリジンに置く
+
+`public/engine/` に次の3ファイルを同梱する。CDN からは読み込まない。
+
+- `stockfish.js`
+- `stockfish.wasm`（約1.6MB）
+- `stockfish.worker.js`
+
+理由は節2.2に書いたとおり。COEP 下でクロスオリジンのスクリプトがブロックされることに加え、`new Worker()` がクロスオリジンの URL を受け付けないため、ワーカースクリプトは同一オリジンでなければならない。
+
+WASM は約1.6MBあるため、`Cache-Control` を長め（例: `max-age=31536000, immutable`）に設定して2回目以降の読み込みを速くする。
+
+### C.3 デプロイに必要なもの
+
+**Node.js（バージョン20以上）** が必須。`firebase-tools` の `engines` は実測で `>=20.0.0 || >=22.0.0 || >=24.0.0`。
+
+```
+HOMEBREW_NO_AUTO_UPDATE=1 brew install node
+node -v
+```
+
+**手順**
+
+```
+# 1. ログイン（ブラウザが開く。ユーザーの Google アカウントで認証する）
+npx firebase-tools login
+
+# 2. プロジェクトを作成（初回のみ）
+npx firebase-tools projects:create <project-id> --display-name "将棋鍛錬アプリ"
+
+# 3. プロジェクトIDを設定
+#    .firebaserc に { "projects": { "default": "<project-id>" } } を書く
+
+# 4. デプロイ
+npx firebase-tools deploy --only hosting
+```
+
+`firebase login` はブラウザでの認証が必要なため、**ユーザー本人の操作が要る**。それ以外は自動で実行できる。
+
+### C.4 ローカルでの確認
+
+- **Node あり**: `npx firebase-tools emulators:start --only hosting`（`firebase.json` のヘッダーが適用される）
+- **Node なし**: `python3 serve.py`（COOP/COEP を自前で付与する。Node を入れる前でも確認できる）
+
+素の `python3 -m http.server` はヘッダーを送らないため、エンジンが起動しない。
+
+### C.5 ライセンス
+
+Fairy-Stockfish は GPL-3.0。エンジンを同梱するため、ライセンス原文（`COPYING.txt`）を `public/engine/` に置き、アプリ内から確認できるようにする。
+
+### C.6 セキュリティルール
+
+Firestore や Realtime Database は使わない（保存は端末内のみ）。したがってデータベースのセキュリティルール設定は不要である。Cloud Functions も使わない（すべてブラウザ内で完結する）。
