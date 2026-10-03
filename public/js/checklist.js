@@ -28,8 +28,13 @@ function specToTypes(spec) {
 }
 
 function pieceMatches(piece, spec) {
-  const types = specToTypes(spec);
-  if (types.length === 0) return true;
+  const raw = String(spec ?? "").trim();
+  // 指定が無ければ「種類を問わない」
+  if (raw === "") return true;
+  const types = specToTypes(raw);
+  // 解釈できない指定は一致させない。
+  // ここで true を返すと、綴りを間違えた条件が毎手成立してしまう。
+  if (types.length === 0) return false;
   return Boolean(piece) && types.includes(piece.type);
 }
 

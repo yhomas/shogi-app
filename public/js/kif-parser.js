@@ -11,7 +11,9 @@
 //     黙って別の局面を再現するより、読めないと言うほうが安全なため。
 
 import { createInitialPosition, HAND_PIECE_TYPES } from "./state.js";
-import { squareToEngine } from "./coords.js";
+import { squareToEngine, engineToSquare } from "./coords.js";
+import { applyMove } from "./moves.js";
+import { canMoveTo } from "./attack-map.js";
 
 const RANK_KANJI = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
@@ -24,12 +26,16 @@ const PIECE_TOKENS = [
 const PIECE_TYPE = {
   歩: "P", 香: "L", 桂: "N", 銀: "S", 金: "G", 角: "B", 飛: "R", 玉: "K", 王: "K",
   と: "P", 馬: "B", 龍: "R", 竜: "R", 成香: "L", 成桂: "N", 成銀: "S",
+  // 持ち駒の行で使われる長い名前（仕様 4.3 の例「桂馬 二 銀 一」）
+  歩兵: "P", 香車: "L", 桂馬: "N", 銀将: "S", 金将: "G", 角行: "B", 飛車: "R",
+  玉将: "K", 王将: "K",
 };
 
 const ALREADY_PROMOTED = new Set(["と", "馬", "龍", "竜", "成香", "成桂", "成銀"]);
 
 const RESULT_WORDS = [
-  "投了", "中断", "詰み", "不詰", "千日手", "持将棋", "反則勝ち", "反則負け", "入玉勝ち", "時間切れ",
+  "投了", "中断", "詰み", "不詰", "千日手", "持将棋", "切れ負け", "反則勝ち", "反則負け",
+  "入玉勝ち", "宣言勝ち", "時間切れ",
 ];
 
 const KANJI_DIGIT = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
@@ -65,14 +71,49 @@ function applyHands(position, ownerLabel, value) {
   const cleaned = value.trim();
   if (cleaned === "" || cleaned === "なし" || cleaned === "無し") return;
 
-  for (const item of cleaned.split(/[\s　]+/)) {
-    if (item === "") continue;
-    const countText = item.replace(/[^0-9０-９一二三四五六七八九十]/g, "");
-    const pieceChar = item.replace(/[0-9０-９一二三四五六七八九十\s　]/g, "");
+  // 2つの書き方がある。
+  //   「金　歩三」… 駒名と枚数が続く形（枚数は駒名に直接付く）
+  //   「桂馬 二 銀 一」… 駒名と枚数が空白で分かれる形
+  // 後者では駒名だけのトークンを保留し、次が枚数だけならそれを対応付ける。
+  let held = null;
+  const flush = () => {
+    if (held) {
+      hands[held] += 1;
+      held = null;
+    }
+  };
+
+  for (const token of cleaned.split(/[\s　]+/)) {
+    if (token === "") continue;
+    const pieceChar = token.replace(/[0-9０-９一二三四五六七八九十]/g, "");
+    const countText = token.replace(/[^0-9０-９一二三四五六七八九十]/g, "");
+
+    if (pieceChar === "") {
+      // 枚数だけのトークン → 保留している駒名に効く
+      if (held) {
+        hands[held] += parseCount(countFromNormalized(countText));
+        held = null;
+      }
+      continue;
+    }
+
     const type = PIECE_TYPE[pieceChar];
-    if (!type || type === "K") continue;
+    if (!type || type === "K") {
+      flush();
+      continue;
+    }
+
+    if (countText === "") {
+      // 駒名だけ。直前の保留は1枚で確定し、この駒名が枚数待ちになる。
+      flush();
+      held = type;
+      continue;
+    }
+
+    flush();
     hands[type] += parseCount(countFromNormalized(countText));
   }
+  flush();
 }
 
 function countFromNormalized(text) {
@@ -80,12 +121,11 @@ function countFromNormalized(text) {
 }
 
 /**
- * 指し手の本文を解析して、エンジン記法の手を返す。読めなければ null。
+ * 指し手の本文を解析して、エンジン記法の手を返す。読めなければ理由を返す。
  * @param {string} text 移動元の括弧や消費時間を含む本文
- * @param {string|null} previousTo 直前の手の行き先（同 で使う）
- * @param {boolean} isFirstPlayer 先手の手かどうか（駒打ちの大文字・小文字に使う）
+ * @param {{previousTo: string|null, isFirstPlayer: boolean, position: object}} context
  */
-function parseMoveText(text, previousTo, isFirstPlayer) {
+function parseMoveText(text, { previousTo, isFirstPlayer, position }) {
   let rest = text.replace(/^[▲△▼▽☗☖^◐]+/, " ");
 
   // 移動元のマス。指し手本体の直後の (数字2桁) だけ。
@@ -130,11 +170,49 @@ function parseMoveText(text, previousTo, isFirstPlayer) {
   else promoted = rest.includes("成");
 
   const letter = PIECE_TYPE[pieceToken];
+
   if (isDropMove) {
-    return { move: `${isFirstPlayer ? letter : letter.toLowerCase()}@${toSquare}`, to: toSquare };
+    // 駒打ちの種類は手番によらず大文字に揃える（画面・棋譜・エンジンで同じ表記にする）
+    return { move: `${letter}@${toSquare}`, to: toSquare };
   }
-  if (!fromSquare) return { error: "移動元のマスが書かれていません" };
+
+  if (!fromSquare) {
+    // 移動元が省略されている場合は、そのマスへ動ける同じ駒種の駒を盤面から探す（仕様 4.3.4）
+    const owner = isFirstPlayer ? "w" : "b";
+    const found = findFromSquare(position, toSquare, letter, owner, rest);
+    if (found.error) return { error: found.error };
+    fromSquare = found.square;
+  }
+
   return { move: `${fromSquare}${toSquare}${promoted ? "+" : ""}`, to: toSquare };
+}
+
+/** 移動元が書かれていないとき、盤面から特定する。 */
+function findFromSquare(position, toSquare, type, owner, text) {
+  const { column: toColumn, rank: toRank } = engineToSquare(toSquare);
+  let candidates = [];
+
+  for (let index = 0; index < position.board.length; index += 1) {
+    const piece = position.board[index];
+    if (!piece || piece.owner !== owner || piece.type !== type) continue;
+    const column = 9 - (index % 9);
+    const rank = Math.floor(index / 9) + 1;
+    if (canMoveTo(position, column, rank, toColumn, toRank)) candidates.push({ column, rank });
+  }
+
+  // 「直」は同じ筋から動かす手を指す
+  if (candidates.length > 1 && text.includes("直")) {
+    const straight = candidates.filter((candidate) => candidate.column === toColumn);
+    if (straight.length === 1) candidates = straight;
+  }
+
+  if (candidates.length === 1) {
+    return { square: squareToEngine(candidates[0].column, candidates[0].rank) };
+  }
+  if (candidates.length === 0) {
+    return { error: "そのマスへ動ける同じ駒種の駒が盤面にありません" };
+  }
+  return { error: "移動元が複数考えられ、絞り込めません" };
 }
 
 /** 盤面図の行かどうか（途中図から始まる棋譜の検出）。 */
@@ -161,7 +239,8 @@ export function parseKif(text) {
   let result = null;
   let previousTo = null;
   let stopped = false;
-  let diagramReported = false;
+  // 移動元が省略された手を特定するため、読んだ手を順に局面へ適用していく
+  let position = startPosition;
 
   const lines = String(text).split(/\r?\n/);
 
@@ -187,18 +266,10 @@ export function parseKif(text) {
       return;
     }
 
-    // 盤面図から始まる棋譜には対応しない
-    if (looksLikeBoardDiagram(trimmed)) {
-      if (!diagramReported) {
-        diagramReported = true;
-        errors.push({
-          line: lineNumber,
-          text: rawLine,
-          reason: "盤面図から始まる棋譜には対応していません。平手初期局面から始まる棋譜を読み込んでください。",
-        });
-      }
-      return;
-    }
+    // 盤面図は仕様 4.3.3 のとおり読み飛ばす（図から局面は作らない）。
+    // 途中図から始まる棋譜を平手と取り違えた場合は、棋譜の再生時に
+    // 「その局面の合法手にない」として検出される。
+    if (looksLikeBoardDiagram(trimmed)) return;
 
     // 終局の表記
     const resultWord = RESULT_WORDS.find((word) => trimmed.includes(word));
@@ -215,7 +286,7 @@ export function parseKif(text) {
     const moveNumber = Number(moveMatch[1]);
     const isFirstPlayer = /[▲☗]/.test(line) ? true : /[△☖]/.test(line) ? false : moveNumber % 2 === 1;
 
-    const parsed = parseMoveText(moveMatch[2], previousTo, isFirstPlayer);
+    const parsed = parseMoveText(moveMatch[2], { previousTo, isFirstPlayer, position });
     if (!parsed || parsed.error) {
       errors.push({
         line: lineNumber,
@@ -227,6 +298,13 @@ export function parseKif(text) {
 
     moves.push(parsed.move);
     previousTo = parsed.to;
+    try {
+      position = applyMove(position, parsed.move);
+    } catch (error) {
+      // 盤面と合わない手。以降の「同」や移動元の特定が狂うので、そこで止める。
+      errors.push({ line: lineNumber, text: rawLine, reason: `局面に適用できません: ${error.message}` });
+      stopped = true;
+    }
   });
 
   return { startPosition, moves, errors, result };

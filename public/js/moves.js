@@ -3,7 +3,8 @@
 // 指し手はエンジンの記法（仕様 2.4）で扱う。
 //   - 移動: 「from + to」の4文字。例 c3c4（7七→7六）
 //   - 成り: 末尾に + を付ける。例 e8e9+
-//   - 打ち: 「駒の種類 + @ + to」。例 P@e5（歩を5五へ打つ）。後手は小文字（p@e5）
+//   - 打ち: 「駒の種類 + @ + to」。例 P@e5（歩を5五へ打つ）。
+//     駒の種類は手番によらず大文字に揃える（エンジンの返し方に左右されないようにするため）。
 //
 // 合法手の判定そのものはエンジンに任せる。このモジュールは、エンジンが返した合法手を
 // 画面で使える形にし、選ばれた手を局面に適用する。
@@ -145,6 +146,11 @@ export async function replayMoves(engine, startPosition, moves, upto = moves.len
   return { position, previousPosition, invalidAtIndex: -1 };
 }
 
+/** 駒打ちの文字は大文字に揃える。エンジンの返し方に左右されないようにするため。 */
+function normalizeDrop(move) {
+  return move.includes("@") ? move[0].toUpperCase() + move.slice(1) : move;
+}
+
 /**
  * エンジンに聞いて、その局面の合法手を漏れなく集める。
  * perft 1 を使う。MultiPV を使う方法と違って手数の上限に縛られない。
@@ -158,7 +164,7 @@ export async function enumerateLegalMoves(engine, position) {
 
   const unsubscribe = engine.subscribe((line) => {
     const match = line.match(movePattern);
-    if (match) collected.add(match[1]);
+    if (match) collected.add(normalizeDrop(match[1]));
   });
 
   try {

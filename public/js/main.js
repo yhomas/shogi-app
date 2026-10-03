@@ -307,8 +307,16 @@ function openCheckPanel(move, items) {
   ui.checkPanel.scrollIntoView({ block: "nearest" });
 }
 
+/** 進行中の検討を打ち切る。エンジンは1つなので、着手の前に必ず止める。 */
+function cancelAnalysis() {
+  analysisToken += 1; // 進行中の検討結果を捨てる
+  if (engine) engine.stop();
+}
+
 /** 指す前に条件を評価する。出す項目が無ければそのまま指す。 */
 function requestMoveConfirmation(move) {
+  // 検討（go depth）が走っていると bestmove の受け取りが混ざるので止める
+  cancelAnalysis();
   const key = `${boardToSfen(position)}|${move}`;
   const items = evaluate(checkItems, buildContext());
 
@@ -497,6 +505,8 @@ function undo() {
     plyCount = snapshot.plyCount ?? 0;
     if (position.turn === mySide) break;
   }
+  // 確認パネルを開いたまま戻すと、古い手を今の局面に対して指してしまう
+  closeCheckPanel();
   clearSelection();
   setMessage("");
   phase = position.turn === mySide ? "human" : "thinking";

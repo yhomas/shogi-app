@@ -113,3 +113,10 @@ test("自分の玉が狙われている条件", () => {
   position.board[67] = null;
   assert.equal(matchesCondition({ type: "myKingThreatened" }, ctx({ position })), false);
 });
+
+test("解釈できない piece 指定は一致しない（条件を絞ったつもりが常に成立するのを防ぐ）", () => {
+  assert.equal(matchesCondition({ type: "opponentMovedPiece", piece: "飛車" }, ctx({ lastMove: "c3c4" })), false);
+  assert.equal(matchesCondition({ type: "myPieceAt", piece: "なにか", squares: ["e1"] }, ctx()), false);
+  // 指定が空なら「種類を問わない」で今までどおり
+  assert.equal(matchesCondition({ type: "opponentMovedPiece" }, ctx({ lastMove: "c3c4" })), true);
+});

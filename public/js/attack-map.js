@@ -78,6 +78,38 @@ function movementOf(piece) {
 }
 
 /**
+ * from の駒が to へ動けるか。利きの計算と同じ規則を使う。
+ * kif で移動元が省略されているときに、盤面から駒を特定するために使う（仕様4.3.4）。
+ * @param {object} position
+ * @param {number} fromColumn
+ * @param {number} fromRank
+ * @param {number} toColumn
+ * @param {number} toRank
+ * @returns {boolean}
+ */
+export function canMoveTo(position, fromColumn, fromRank, toColumn, toRank) {
+  const piece = position.board[boardIndex(fromColumn, fromRank)];
+  if (!piece) return false;
+
+  const forward = piece.owner === "w" ? 1 : -1;
+  for (const [dRank, dColumn, maxSteps] of movementOf(piece)) {
+    const stepRank = dRank * forward;
+    let r = fromRank + stepRank;
+    let c = fromColumn + dColumn;
+    let steps = 0;
+
+    while (steps < maxSteps && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
+      if (r === toRank && c === toColumn) return true;
+      if (position.board[boardIndex(c, r)]) break;
+      r += stepRank;
+      c += dColumn;
+      steps += 1;
+    }
+  }
+  return false;
+}
+
+/**
  * 各マスの利き数を数える。
  * @param {{board: (object|null)[], hands: object, turn: string}} position
  * @returns {{w: Int16Array, b: Int16Array}} 添字は boardIndex と同じ

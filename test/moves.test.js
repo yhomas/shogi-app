@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { destinationsFrom, applyMove, isDrop, isPromotion, resolveMove, replayMoves } from "../public/js/moves.js";
+import { destinationsFrom, applyMove, isDrop, isPromotion, resolveMove, replayMoves, enumerateLegalMoves } from "../public/js/moves.js";
 import { createInitialPosition, emptyHands, boardIndex } from "../public/js/state.js";
 import { boardToSfen } from "../public/js/coords.js";
 
@@ -180,4 +180,27 @@ test("replayMoves: 0手なら開始局面のまま", async () => {
   const r = await replayMoves(fakeEngine({}), start, ["c3c4"], 0);
   assert.equal(r.position, start);
   assert.equal(r.invalidAtIndex, -1);
+});
+
+test("enumerateLegalMoves: エンジンが小文字で返す駒打ちも大文字に揃える", async () => {
+  // 実測では後手の駒打ちも大文字で返るが、小文字で返る実装でも動くようにしておく。
+  // 揃えないと、後手の駒打ちを含む棋譜が「合法手にない」と誤判定される。
+  const start = createInitialPosition();
+  const engine = fakeEngine({ [boardToSfen(start)]: ["p@e5", "c3c4"] });
+  const moves = await enumerateLegalMoves(engine, start);
+  assert.ok(moves.includes("P@e5"), JSON.stringify(moves));
+  assert.ok(moves.includes("c3c4"), JSON.stringify(moves));
+});
+
+test("replayMoves: 後手の駒打ちを含む棋譜を照合できる", async () => {
+  // 正規化により、エンジンが小文字で返しても大文字で揃う。
+  // kif から読んだ手も大文字なので一致する。
+  const start = createInitialPosition();
+  const afterOne = applyMove(start, "c3c4");
+  const engine = fakeEngine({
+    [boardToSfen(start)]: ["c3c4"],
+    [boardToSfen(afterOne)]: ["p@e5"],
+  });
+  const r = await replayMoves(engine, start, ["c3c4", "P@e5"]);
+  assert.equal(r.invalidAtIndex, -1, JSON.stringify(r));
 });

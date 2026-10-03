@@ -58,3 +58,38 @@ test("開始局面の盤面は平手初期局面", () => {
   assert.equal(r.startPosition.board.filter(Boolean).length, 40);
   assert.equal(r.startPosition.turn, "w");
 });
+
+test("持ち駒行の『駒名 空白 枚数』形式を読める（仕様4.3の例）", () => {
+  const r = parseKif("後手の持駒：桂馬 二 銀 一\n先手の持駒：なし\n   1 投了\n");
+  assert.equal(r.startPosition.hands.b.N, 2);
+  assert.equal(r.startPosition.hands.b.S, 1);
+  assert.equal(r.startPosition.hands.w.P, 0);
+});
+
+test("移動元が省略されていても盤面から特定する（仕様4.3.4）", () => {
+  const r = parseKif("   1 ７六歩\n   2 ３四歩\n   3 投了\n");
+  assert.deepEqual(r.moves, ["c3c4", "g7g6"]);
+  assert.equal(r.errors.length, 0);
+});
+
+test("盤面図の行はエラーにせず読み飛ばす（仕様4.3.3）", () => {
+  const kif = [
+    "後手の持駒：なし",
+    "  ９ ８ ７ ６ ５ ４ ３ ２ １",
+    "+---------------------------+",
+    "|v香v桂v銀v金v玉v金v銀v桂v香|一",
+    "   1 ７六歩(77)",
+    "   2 投了",
+    "",
+  ].join("\n");
+  const r = parseKif(kif);
+  assert.deepEqual(r.moves, ["c3c4"]);
+  assert.equal(r.errors.length, 0);
+  assert.equal(r.result, "投了");
+});
+
+test("終局の表記を仕様の一覧どおりに読む（仕様4.3.6）", () => {
+  assert.equal(parseKif("   1 ７六歩(77)\n   2 投了\n").result, "投了");
+  assert.equal(parseKif("   1 ７六歩(77)\n   2 切れ負け\n").result, "切れ負け");
+  assert.equal(parseKif("   1 ７六歩(77)\n   2 宣言勝ち\n").result, "宣言勝ち");
+});
