@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { destinationsFrom, applyMove, isDrop, isPromotion, resolveMove } from "../public/js/moves.js";
+import { destinationsFrom, applyMove, isDrop, isPromotion, resolveMove, replayMoves } from "../public/js/moves.js";
 import { createInitialPosition, emptyHands, boardIndex } from "../public/js/state.js";
 import { boardToSfen } from "../public/js/coords.js";
 
@@ -115,4 +115,69 @@ test("resolveMove: 打つ手も同じ仕組みで決まる", () => {
     move: "P@e5",
     needsPromotionChoice: false,
   });
+});
+
+// エンジンの代わり。局面ごとに決めた合法手を返すだけ。
+function fakeEngine(legalMovesBySfen) {
+  let listener = null;
+  let sfen = "";
+  return {
+    subscribe(fn) {
+      listener = fn;
+      return () => {
+        listener = null;
+      };
+    },
+    setPositionSfen(value) {
+      sfen = value;
+    },
+    async goPerft() {
+      for (const move of legalMovesBySfen[sfen] ?? []) listener(`${move}: 1`);
+      return 0;
+    },
+  };
+}
+
+test("replayMoves: 合法な手を順に適用する", async () => {
+  const start = createInitialPosition();
+  const afterOne = applyMove(start, "c3c4");
+  const engine = fakeEngine({
+    [boardToSfen(start)]: ["c3c4", "g3g4"],
+    [boardToSfen(afterOne)]: ["g7g6"],
+  });
+  const r = await replayMoves(engine, start, ["c3c4", "g7g6"]);
+  assert.equal(r.invalidAtIndex, -1);
+  assert.equal(r.position.turn, "w"); // 2手進んだので先手番に戻る
+});
+
+test("replayMoves: 途中に合法でない手があれば、そこを報告して止める", async () => {
+  const start = createInitialPosition();
+  const afterOne = applyMove(start, "c3c4");
+  const engine = fakeEngine({
+    [boardToSfen(start)]: ["c3c4"],
+    [boardToSfen(afterOne)]: ["g7g6"],
+  });
+  const r = await replayMoves(engine, start, ["c3c4", "g4g5"]);
+  assert.equal(r.invalidAtIndex, 1);
+  assert.equal(r.move, "g4g5");
+  assert.equal(r.position.turn, "b"); // 1手目までは適用済み
+});
+
+test("replayMoves: upto で途中まで再生できる", async () => {
+  const start = createInitialPosition();
+  const afterOne = applyMove(start, "c3c4");
+  const engine = fakeEngine({
+    [boardToSfen(start)]: ["c3c4"],
+    [boardToSfen(afterOne)]: ["g7g6"],
+  });
+  const r = await replayMoves(engine, start, ["c3c4", "g7g6"], 1);
+  assert.equal(r.invalidAtIndex, -1);
+  assert.equal(r.position.turn, "b");
+});
+
+test("replayMoves: 0手なら開始局面のまま", async () => {
+  const start = createInitialPosition();
+  const r = await replayMoves(fakeEngine({}), start, ["c3c4"], 0);
+  assert.equal(r.position, start);
+  assert.equal(r.invalidAtIndex, -1);
 });

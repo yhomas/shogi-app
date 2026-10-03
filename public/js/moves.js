@@ -118,6 +118,32 @@ export function applyMove(position, move) {
 }
 
 /**
+ * 棋譜の手列を、エンジンに照合しながら順に再生する。
+ * 途中に合法でない手があれば、そこで止めて何手目かを報告する。
+ * 黙って別の局面を再現しないための検査でもある。
+ * @param {object} engine
+ * @param {object} startPosition
+ * @param {string[]} moves
+ * @param {number} [upto] 何手目まで再生するか（既定は最後まで）
+ * @returns {Promise<{position: object, invalidAtIndex: number, move?: string, legal?: string[]}>}
+ */
+export async function replayMoves(engine, startPosition, moves, upto = moves.length) {
+  let position = startPosition;
+  const limit = Math.max(0, Math.min(upto, moves.length));
+
+  for (let index = 0; index < limit; index += 1) {
+    const move = moves[index];
+    const legal = await enumerateLegalMoves(engine, position);
+    if (!legal.includes(move)) {
+      return { position, invalidAtIndex: index, move, legal };
+    }
+    position = applyMove(position, move);
+  }
+
+  return { position, invalidAtIndex: -1 };
+}
+
+/**
  * エンジンに聞いて、その局面の合法手を漏れなく集める。
  * perft 1 を使う。MultiPV を使う方法と違って手数の上限に縛られない。
  * @param {{setOption: Function, setPositionSfen: Function, goPerft: Function, subscribe: Function}} engine

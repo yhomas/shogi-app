@@ -15,7 +15,8 @@ import { boardToSfen, engineToSquare, squareToEngine } from "./coords.js";
 import { countAttacks } from "./attack-map.js";
 import { renderBoard } from "./board.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
-import { applyMove, destinationsFrom, enumerateLegalMoves, resolveMove } from "./moves.js";
+import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
+import { parseKif } from "./kif-parser.js";
 
 const HAND_LABELS = { P: "歩", L: "香", N: "桂", S: "銀", G: "金", B: "角", R: "飛" };
 const HAND_ORDER = ["R", "B", "G", "S", "N", "L", "P"];
@@ -30,6 +31,12 @@ const ui = {
   undo: document.getElementById("undo"),
   mode: document.getElementById("attack-mode"),
   message: document.getElementById("message"),
+  kifFile: document.getElementById("kif-file"),
+  kifUpto: document.getElementById("kif-upto"),
+  kifUptoLabel: document.getElementById("kif-upto-label"),
+  kifApply: document.getElementById("kif-apply"),
+  kifStatus: document.getElementById("kif-status"),
+  mySide: document.getElementById("my-side"),
 };
 
 let position = createInitialPosition();
@@ -41,6 +48,7 @@ let selectedHand = null;
 let destinations = [];
 let mySide = "w";
 let engine = null;
+let parsedKif = null;
 
 const opponentOf = (side) => (side === "w" ? "b" : "w");
 const sideName = (side) => (side === "w" ? "先手" : "後手");
@@ -278,12 +286,133 @@ ui.board.addEventListener("click", (event) => {
   onSquareClick(9 - (index % 9), Math.floor(index / 9) + 1);
 });
 
+// ---- 棋譜（kif）の読み込み ----
+
+function setKifStatus(text) {
+  ui.kifStatus.textContent = text;
+}
+
+function updateKifLabel() {
+  ui.kifUptoLabel.textContent = `${ui.kifUpto.value}手目`;
+}
+
+/** 指定した手数まで再生した局面を返す（合法手かどうかも見る）。 */
+function kifPositionAt(upto) {
+  return replayMoves(engine, parsedKif.startPosition, parsedKif.moves, upto);
+}
+
+/** 既定は「再現した局面の手番側を自分が指す」。 */
+async function syncDefaultSide() {
+  if (!parsedKif) return;
+  const replayed = await kifPositionAt(Number(ui.kifUpto.value));
+  if (replayed.invalidAtIndex === -1) ui.mySide.value = replayed.position.turn;
+}
+
+function loadKif(text) {
+  parsedKif = parseKif(text);
+  ui.kifUpto.max = String(parsedKif.moves.length);
+  ui.kifUpto.value = String(parsedKif.moves.length);
+  updateKifLabel();
+
+  const parts = [`棋譜を読みました: ${parsedKif.moves.length}手`];
+  if (parsedKif.result) parts.push(`終局: ${parsedKif.result}`);
+  if (parsedKif.errors.length > 0) {
+    const first = parsedKif.errors[0];
+    parts.push(
+      `読めない行が${parsedKif.errors.length}件あります（${first.line}行目: ${first.reason}）`,
+    );
+  }
+  setKifStatus(parts.join("／"));
+}
+
+/** 2手先までのノード数。局面が本当に読めているかの確認に使う。 */
+async function perftNodes(target, depth = 2) {
+  try {
+    engine.setPositionSfen(boardToSfen(target));
+    return await engine.goPerft(depth);
+  } catch (error) {
+    return null;
+  }
+}
+
+async function startFromKif() {
+  if (!parsedKif) {
+    setKifStatus("先に棋譜ファイルを選んでください。");
+    return;
+  }
+  if (phase === "thinking") return;
+
+  const upto = Number(ui.kifUpto.value);
+  const replayed = await kifPositionAt(upto);
+  if (replayed.invalidAtIndex !== -1) {
+    setKifStatus(
+      `${replayed.invalidAtIndex + 1}手目（${replayed.move}）がその局面の合法手にありません。棋譜を確認してください。`,
+    );
+    return;
+  }
+
+  // 局面が読めているかを確かめる。0 や取れない場合は始めない。
+  const nodes = await perftNodes(replayed.position);
+  if (nodes === null || nodes === 0) {
+    setKifStatus(
+      "この局面の2手先までのノード数が取れませんでした。別の局面で始めないよう、ここで中止します。",
+    );
+    return;
+  }
+
+  position = replayed.position;
+  history = [];
+  clearSelection();
+  mySide = ui.mySide.value;
+  setMessage("");
+  await refreshLegalMoves();
+
+  const sideText = mySide === "w" ? "先手" : "後手";
+  setKifStatus(
+    `${upto}手目から対局します（あなたは${sideText}／2手先までのノード数: ${nodes}）。`,
+  );
+
+  if (position.turn === mySide) {
+    phase = legalMoves.length === 0 ? "over" : "human";
+    render();
+    if (phase === "over") finishWithMate();
+  } else {
+    runEngineTurn();
+  }
+}
+
 ui.mode.addEventListener("change", render);
 ui.newGame.addEventListener("click", () => {
   if (phase === "thinking") return;
   newGame();
 });
 ui.undo.addEventListener("click", undo);
+
+ui.kifFile.addEventListener("change", async () => {
+  const file = ui.kifFile.files?.[0];
+  if (!file) return;
+  try {
+    loadKif(await file.text());
+    await syncDefaultSide();
+  } catch (error) {
+    setKifStatus(`棋譜を読めませんでした: ${error.message}`);
+  }
+});
+
+ui.kifUpto.addEventListener("input", updateKifLabel);
+ui.kifUpto.addEventListener("change", () => {
+  syncDefaultSide();
+});
+
+ui.mySide.addEventListener("change", () => {
+  if (phase === "thinking") return;
+  // 対局中でも自分の側を切り替えられるようにする
+  mySide = ui.mySide.value;
+  render();
+  if (position.turn !== mySide && phase !== "over") runEngineTurn();
+});
+
+ui.kifApply.addEventListener("click", startFromKif);
 
 async function boot() {
   const guard = guardCrossOriginIsolation();
@@ -317,4 +446,9 @@ window.__app = {
   onHandClick,
   undo,
   newGame,
+  loadKif,
+  startFromKif,
+  syncDefaultSide,
+  get parsedKif() { return parsedKif; },
+  get mySide() { return mySide; },
 };

@@ -131,3 +131,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .hand-piece.selected { box-shadow: inset 0 0 0 2px #d08a00; }
 
 .message { min-height: 1.5em; font-size: 14px; color: #a01010; }
+
+.kif input[type="file"] { font-size: 13px; max-width: 220px; }
+
+.kif input[type="range"] { width: 160px; }
+
+.hint { font-size: 13px; color: #446; min-height: 1.5em; }

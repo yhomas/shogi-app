@@ -28,6 +28,20 @@
     </select>
   </div>
 
+  <div class="bar kif">
+    <label for="kif-file">棋譜（kif）を読む</label>
+    <input id="kif-file" type="file" accept=".kif,.txt,text/plain">
+    <label for="kif-upto">開始手数 <output id="kif-upto-label">0</output></label>
+    <input id="kif-upto" type="range" min="0" max="0" value="0" step="1">
+    <label for="my-side">自分が指す側</label>
+    <select id="my-side">
+      <option value="w" selected>先手</option>
+      <option value="b">後手</option>
+    </select>
+    <button id="kif-apply" type="button">この局面から対局</button>
+  </div>
+  <div class="hint" id="kif-status"></div>
+
   <section class="hand" id="hand-opp"></section>
   <div id="board"></div>
   <section class="hand" id="hand-mine"></section>
