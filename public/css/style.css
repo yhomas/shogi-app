@@ -174,3 +174,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .settings summary { cursor: pointer; padding: 4px 0; }
 
 .settings .bar { margin: 4px 0; }
+
+.pv-list { margin: 0; padding-left: 1.4em; font-size: 13px; font-family: ui-monospace, monospace; }
+
+.pv-list li { padding: 2px 0; }

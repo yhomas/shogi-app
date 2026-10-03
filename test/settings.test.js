@@ -29,7 +29,7 @@ test("Hash は端末のメモリに応じて 16..256MB に収まる", () => {
 
 test("Elo 指定のときの既定値", () => {
   const s = defaultStrengthSettings({ hardwareConcurrency: 4 });
-  assert.equal(s.elo, 1500);
+  assert.equal(s.elo, 1350);
   assert.equal(s.skill, 20);
 });
 
@@ -48,7 +48,7 @@ test("保存して読み戻せる（範囲外の値は丸める）", () => {
   saveStrengthSettings(settings, s);
   const loaded = loadStrengthSettings(s);
   assert.equal(loaded.mode, "elo");
-  assert.equal(loaded.depth, 30);        // 上限
+  assert.equal(loaded.depth, 40);        // 上限
   assert.equal(loaded.threads, 8);       // 上限
   assert.equal(loaded.hashMb, 256);      // 上限
 });

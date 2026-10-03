@@ -11,10 +11,38 @@
 
   <header class="bar">
     <div class="turn" id="turn">読み込み中…</div>
-    <label class="depth">読みの深さ
-      <input id="depth" type="number" min="1" max="30" step="1" value="10">
-    </label>
   </header>
+
+  <details class="settings" open>
+    <summary>強さの設定</summary>
+    <div class="bar">
+      <label><input type="radio" name="strength-mode" id="mode-depth" value="depth" checked> 深さ指定</label>
+      <label>深さ <input id="depth" type="number" min="1" max="40" step="1" value="10"></label>
+      <label>Skill Level <input id="skill" type="number" min="-20" max="20" step="1" value="20"></label>
+    </div>
+    <div class="bar">
+      <label><input type="radio" name="strength-mode" id="mode-elo" value="elo"> Elo指定</label>
+      <label>Elo <input id="elo" type="number" min="500" max="2850" step="10" value="1350"></label>
+      <label>スレッド <input id="threads" type="number" min="1" max="8" step="1" value="1"></label>
+      <label>ハッシュ(MB) <input id="hash-mb" type="number" min="16" max="256" step="16" value="64"></label>
+      <label>複数候補 <input id="multi-pv" type="number" min="1" max="10" step="1" value="1"></label>
+    </div>
+    <div class="bar">
+      <label for="play-mode">モード</label>
+      <select id="play-mode">
+        <option value="practice" selected>練習（評価値を見せない）</option>
+        <option value="study">検討（評価値と候補手を見せる）</option>
+      </select>
+      <button id="settings-save" type="button">設定を保存</button>
+    </div>
+    <p class="hint" id="settings-status"></p>
+  </details>
+
+  <section class="panel" id="analysis-panel" hidden>
+    <h2>検討</h2>
+    <p class="hint" id="analysis-summary"></p>
+    <ol class="pv-list" id="pv-list"></ol>
+  </section>
 
   <div class="bar">
     <button id="new-game" type="button">新対局</button>

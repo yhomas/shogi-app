@@ -170,6 +170,17 @@ export async function createEngine({ url = DEFAULT_ENGINE_URL, onLine, threads, 
       );
       return line.split(/\s+/)[1] ?? "";
     },
+    // 時間を区切って指させる（Elo 指定のときに使う）。bestmove の手を返す。
+    async goMovetime(milliseconds) {
+      const bestmove = router.waitFor((line) => line.startsWith("bestmove"));
+      send(`go movetime ${milliseconds}`);
+      const line = await withTimeout(
+        bestmove,
+        SEARCH_TIMEOUT_MS,
+        `エンジンが時間内に手を返しませんでした。`,
+      );
+      return line.split(/\s+/)[1] ?? "";
+    },
     // 合法手を漏れなく数えるための perft。探索したノード数を返す。
     // 各手と本数は subscribe した listener に「c3c4: 1」の形で届く。
     // MultiPV を使う方法と違い、手数の上限（500）に縛られない。

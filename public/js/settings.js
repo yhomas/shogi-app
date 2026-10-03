@@ -11,12 +11,12 @@
 const STORAGE_KEY = "shogi-app.settings.v1";
 
 const LIMITS = {
-  depth: { min: 1, max: 30, fallback: 10 },
-  skill: { min: 0, max: 20, fallback: 20 },
-  elo: { min: 1320, max: 2850, fallback: 1500 },
+  depth: { min: 1, max: 40, fallback: 10 },
+  skill: { min: -20, max: 20, fallback: 20 },
+  elo: { min: 500, max: 2850, fallback: 1350 },
   threads: { min: 1, max: 8, fallback: 1 },
   hashMb: { min: 16, max: 256, fallback: 64 },
-  multiPv: { min: 1, max: 500, fallback: 1 },
+  multiPv: { min: 1, max: 10, fallback: 1 },
 };
 
 const DEFAULT_HASH_MB = 64;

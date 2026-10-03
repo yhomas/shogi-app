@@ -18,6 +18,7 @@ import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
 import { evaluate, loadItems, saveItems } from "./checklist.js";
+import { loadStrengthSettings, saveStrengthSettings } from "./settings.js";
 
 const HAND_LABELS = { P: "歩", L: "香", N: "桂", S: "銀", G: "金", B: "角", R: "飛" };
 const HAND_ORDER = ["R", "B", "G", "S", "N", "L", "P"];
@@ -68,6 +69,19 @@ const ui = {
   itemAdd: document.getElementById("item-add"),
   itemList: document.getElementById("item-list"),
   itemStatus: document.getElementById("item-status"),
+  modeDepth: document.getElementById("mode-depth"),
+  modeElo: document.getElementById("mode-elo"),
+  skill: document.getElementById("skill"),
+  elo: document.getElementById("elo"),
+  threads: document.getElementById("threads"),
+  hashMb: document.getElementById("hash-mb"),
+  multiPv: document.getElementById("multi-pv"),
+  playMode: document.getElementById("play-mode"),
+  settingsSave: document.getElementById("settings-save"),
+  settingsStatus: document.getElementById("settings-status"),
+  analysisPanel: document.getElementById("analysis-panel"),
+  analysisSummary: document.getElementById("analysis-summary"),
+  pvList: document.getElementById("pv-list"),
 };
 
 let position = createInitialPosition();
@@ -85,6 +99,9 @@ let confirmedMoves = new Set();
 let lastMoveInfo = null;
 let plyCount = 0;
 let pendingMove = null;
+let settings = null;
+let studyMode = false;
+let analysisToken = 0;
 
 const opponentOf = (side) => (side === "w" ? "b" : "w");
 const sideName = (side) => (side === "w" ? "先手" : "後手");
@@ -426,6 +443,7 @@ function afterMove() {
   if (position.turn === mySide) {
     phase = "human";
     render();
+    maybeAnalyze();
     return;
   }
   runEngineTurn();
@@ -441,8 +459,9 @@ async function runEngineTurn() {
   phase = "thinking";
   render();
   try {
+    applyStrengthSettings();
     engine.setPositionSfen(boardToSfen(position));
-    const bestmove = await engine.goDepth(Number(ui.depth.value));
+    const bestmove = await searchBestMove();
     // 合法手が無い局面ではエンジンは「(none)」を返す（実測で確認）
     if (!bestmove || bestmove === "(none)") {
       phase = "over";
@@ -460,6 +479,7 @@ async function runEngineTurn() {
     phase = position.turn === mySide ? "human" : "thinking";
     render();
     if (legalMoves.length === 0) finishWithMate();
+    else maybeAnalyze();
   } catch (error) {
     phase = "over";
     setMessage(`エンジンで問題が起きました: ${error.message}`);
@@ -508,6 +528,143 @@ ui.board.addEventListener("click", (event) => {
   const index = Number(squareEl.dataset.index);
   onSquareClick(9 - (index % 9), Math.floor(index / 9) + 1);
 });
+
+// ---- 強さの設定と検討モード ----
+
+const ELO_MOVETIME_MS = 1000;
+const STUDY_MULTI_PV = 5;
+
+function setSettingsStatus(text) {
+  ui.settingsStatus.textContent = text;
+}
+
+/** 画面の入力から設定を読む。 */
+function readSettings() {
+  return {
+    mode: ui.modeElo.checked ? "elo" : "depth",
+    depth: Number(ui.depth.value),
+    skill: Number(ui.skill.value),
+    elo: Number(ui.elo.value),
+    threads: Number(ui.threads.value),
+    hashMb: Number(ui.hashMb.value),
+    multiPv: Number(ui.multiPv.value),
+  };
+}
+
+/** 設定を画面に反映する。 */
+function writeSettings() {
+  ui.modeDepth.checked = settings.mode === "depth";
+  ui.modeElo.checked = settings.mode === "elo";
+  ui.depth.value = String(settings.depth);
+  ui.skill.value = String(settings.skill);
+  ui.elo.value = String(settings.elo);
+  ui.threads.value = String(settings.threads);
+  ui.hashMb.value = String(settings.hashMb);
+  ui.multiPv.value = String(settings.multiPv);
+  ui.playMode.value = studyMode ? "study" : "practice";
+  ui.pvList.textContent = "";
+  ui.analysisPanel.hidden = !studyMode;
+  if (!studyMode) ui.analysisSummary.textContent = "";
+}
+
+/** エンジンに強さの設定を送る。深さ指定と Elo 指定は同時に有効にしない。 */
+function applyStrengthSettings() {
+  if (!engine || !settings) return;
+  engine.setOption("Threads", settings.threads);
+  engine.setOption("Hash", settings.hashMb);
+  engine.setOption("MultiPV", studyMode ? STUDY_MULTI_PV : settings.multiPv);
+  if (settings.mode === "elo") {
+    engine.setOption("UCI_LimitStrength", "true");
+    engine.setOption("UCI_Elo", settings.elo);
+  } else {
+    engine.setOption("UCI_LimitStrength", "false");
+    engine.setOption("Skill Level", settings.skill);
+  }
+}
+
+/** AI に指させる。深さ指定なら go depth、Elo 指定なら時間制限つき。 */
+async function searchBestMove() {
+  if (settings.mode === "elo") return engine.goMovetime(ELO_MOVETIME_MS);
+  return engine.goDepth(settings.depth);
+}
+
+function formatScore(cp, sign) {
+  const value = (cp * sign) / 100;
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function renderAnalysis(found, maxDepth) {
+  const entries = [...found.values()].sort((a, b) => a.multipv - b.multipv).slice(0, STUDY_MULTI_PV);
+  ui.pvList.textContent = "";
+
+  if (entries.length === 0) {
+    ui.analysisSummary.textContent = "候補手を取得できませんでした。";
+    return;
+  }
+
+  // エンジンは手番側から見た値を返すので、先手から見た値に直して出す
+  const sign = position.turn === "w" ? 1 : -1;
+  ui.analysisSummary.textContent = `読みの深さ ${maxDepth}／評価値は先手から見た値`;
+
+  for (const entry of entries) {
+    const li = document.createElement("li");
+    let score;
+    if (entry.mate !== null && entry.mate !== undefined) {
+      const mate = entry.mate * sign;
+      score = mate > 0 ? `詰み${mate}手` : `詰まされる（${Math.abs(mate)}手）`;
+    } else if (entry.cp === null) {
+      score = "—";
+    } else {
+      score = formatScore(entry.cp, sign);
+    }
+    li.textContent = `${score}：${entry.pv.slice(0, 8).join(" ")}`;
+    ui.pvList.appendChild(li);
+  }
+}
+
+/** 検討モードのときだけ、今の局面を読ませて評価値と候補手を出す。 */
+async function analyze() {
+  if (!studyMode || !engine || !settings) return;
+  const token = (analysisToken += 1);
+  const found = new Map();
+  let maxDepth = 0;
+
+  const unsubscribe = engine.subscribe((line) => {
+    if (!line.startsWith("info ")) return;
+    const pvMatch = line.match(/\bpv (.+)$/);
+    if (!pvMatch) return;
+    const multipv = Number(line.match(/\bmultipv (\d+)/)?.[1] ?? 1);
+    const depth = Number(line.match(/\bdepth (\d+)/)?.[1] ?? 0);
+    const cpMatch = line.match(/\bscore cp (-?\d+)/);
+    const mateMatch = line.match(/\bscore mate (-?\d+)/);
+    maxDepth = Math.max(maxDepth, depth);
+    found.set(multipv, {
+      multipv,
+      cp: cpMatch ? Number(cpMatch[1]) : null,
+      mate: mateMatch ? Number(mateMatch[1]) : null,
+      pv: pvMatch[1].trim().split(/\s+/),
+    });
+  });
+
+  applyStrengthSettings();
+  engine.setPositionSfen(boardToSfen(position));
+  try {
+    await engine.goDepth(settings.depth);
+  } catch (error) {
+    unsubscribe();
+    ui.analysisSummary.textContent = `検討できませんでした: ${error.message}`;
+    return;
+  }
+  unsubscribe();
+
+  // 新しい検討が始まっていたら、古い結果は捨てる
+  if (token !== analysisToken) return;
+  renderAnalysis(found, maxDepth);
+}
+
+function maybeAnalyze() {
+  if (studyMode && phase !== "thinking" && phase !== "idle") analyze();
+}
 
 // ---- 棋譜（kif）の読み込み ----
 
@@ -656,6 +813,45 @@ ui.checkCancel.addEventListener("click", () => {
 
 ui.itemAdd.addEventListener("click", addItem);
 
+const STUDY_MODE_KEY = "shogi-app.study-mode";
+
+function loadStudyMode() {
+  try {
+    return localStorage.getItem(STUDY_MODE_KEY) === "1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function saveStudyMode() {
+  try {
+    localStorage.setItem(STUDY_MODE_KEY, studyMode ? "1" : "0");
+  } catch (error) {
+    // 保存できなくても続ける
+  }
+}
+
+ui.settingsSave.addEventListener("click", () => {
+  settings = readSettings();
+  saveStrengthSettings(settings);
+  studyMode = ui.playMode.value === "study";
+  saveStudyMode();
+  writeSettings();
+  setSettingsStatus("設定を保存しました。");
+  applyStrengthSettings();
+  maybeAnalyze();
+});
+
+ui.playMode.addEventListener("change", () => {
+  studyMode = ui.playMode.value === "study";
+  saveStudyMode();
+  writeSettings();
+  setSettingsStatus(
+    studyMode ? "検討モードにしました（評価値と候補手を出します）。" : "練習モードにしました（評価値は出しません）。",
+  );
+  maybeAnalyze();
+});
+
 function fillConditionSelect() {
   for (const [value, label] of CONDITION_TYPES) {
     const option = document.createElement("option");
@@ -669,6 +865,11 @@ async function boot() {
   fillConditionSelect();
   checkItems = loadItems();
   renderItemList();
+
+  settings = loadStrengthSettings();
+  studyMode = loadStudyMode();
+  writeSettings();
+  setSettingsStatus("");
 
   const guard = guardCrossOriginIsolation();
   if (!guard.ok) {
@@ -709,6 +910,10 @@ window.__app = {
   get checkItems() { return checkItems; },
   get pendingMove() { return pendingMove; },
   get lastMoveInfo() { return lastMoveInfo; },
+  get settings() { return settings; },
+  get studyMode() { return studyMode; },
+  get analysisSummary() { return ui.analysisSummary.textContent; },
+  analyze,
   addItem,
   renderItemList,
 };
