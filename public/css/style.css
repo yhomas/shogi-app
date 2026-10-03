@@ -4,34 +4,40 @@
   --square-line: #c8b48c;
   --mine: #1040a0;
   --opp: #a01010;
+  --pad: 8px;
+  --board-border: 3px;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  padding: 8px;
+  padding: var(--pad);
   font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
   color: #222;
   background: #faf7f2;
 }
 
-.app { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.app { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; max-width: 100%; overflow-x: auto; }
 
 .notfound { padding: 24px; }
 
 .controls { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 
 /* 盤面。--sq が1マスの大きさで、盤の幅と文字の大きさがここから決まる。
-   22px は body の余白(8*2)と外枠(3*2)。 */
+   22px は body の余白(8*2)と外枠(3*2)。
+   タップ領域を44px以上にするため、狭い画面では44pxを下回らないようにする
+   （そのぶん横にはみ出すので、.app を横スクロールできるようにしている）。
+   縦持ちでは画面の高さの65%を上限にして、持ち駒やボタンの場所を残す。 */
 #board {
-  --sq: min(62px, calc((100vw - 22px) / 9));
+  --sq: clamp(44px, min(calc((100vw - var(--pad) * 2 - var(--board-border) * 2) / 9), calc(65vh / 9)), 62px);
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
-  width: calc(var(--sq) * 9);
-  height: calc(var(--sq) * 9);
-  border: 3px solid var(--board-line);
+  /* 枠線のぶんを足して、1マスがちょうど --sq になるようにする */
+  width: calc(var(--sq) * 9 + var(--board-border) * 2);
+  height: calc(var(--sq) * 9 + var(--board-border) * 2);
+  border: var(--board-border) solid var(--board-line);
   background: var(--board-bg);
 }
 
@@ -103,6 +109,7 @@ body {
 button {
   font: inherit;
   padding: 6px 12px;
+  min-height: 44px;
   border: 1px solid #b9a071;
   border-radius: 4px;
   background: #fdf6e6;
@@ -123,7 +130,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .hand-piece {
   padding: 4px 8px;
   min-width: 44px;
-  min-height: 32px;
+  min-height: 44px;
 }
 
 .hand-piece.clickable { background: #eaf1fb; border-color: #7d9ad0; }
@@ -178,3 +185,20 @@ button:disabled { opacity: 0.45; cursor: default; }
 .pv-list { margin: 0; padding-left: 1.4em; font-size: 13px; font-family: ui-monospace, monospace; }
 
 .pv-list li { padding: 2px 0; }
+
+.note { font-size: 13px; line-height: 1.7; color: #444; max-width: 640px; }
+
+.footer { font-size: 12px; color: #666; line-height: 1.7; max-width: 640px; padding-top: 4px; }
+
+/* タッチで操作する画面では、指で押せる大きさ（44px以上）を確保する */
+@media (max-width: 700px), (pointer: coarse) {
+  :root { --pad: 6px; }
+
+  select,
+  input[type="file"],
+  input[type="text"],
+  input[type="number"],
+  button { min-height: 44px; }
+
+  .hand-piece { min-width: 48px; }
+}

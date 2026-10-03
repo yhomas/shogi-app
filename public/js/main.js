@@ -879,10 +879,12 @@ async function boot() {
     return;
   }
   try {
-    engine = await createEngine({ threads: 1, hashMb: 64 });
+    engine = await createEngine({ threads: settings.threads, hashMb: settings.hashMb });
   } catch (error) {
     phase = "over";
-    setMessage(error.message);
+    setMessage(
+      `${error.message} 直らないときは、public/engine/ に stockfish.js・stockfish.wasm・stockfish.worker.js の3つが揃っているかを確認してください。`,
+    );
     render();
     return;
   }

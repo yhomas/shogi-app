@@ -36,6 +36,11 @@
       <button id="settings-save" type="button">設定を保存</button>
     </div>
     <p class="hint" id="settings-status"></p>
+    <p class="note">
+      このエンジンは NNUE の評価ファイルを含まないため<strong>古典評価</strong>で動きます。
+      同じ深さでもネイティブ版（PC にインストールして動かす版）より弱くなります。
+      相手の強さを合わせたいときは「Elo指定」を使ってください。
+    </p>
   </details>
 
   <section class="panel" id="analysis-panel" hidden>
@@ -109,6 +114,12 @@
     <p class="hint" id="item-status"></p>
     <ul class="item-list" id="item-list"></ul>
   </details>
+
+  <footer class="footer">
+    エンジン: <a href="./engine/COPYING.txt">Fairy-Stockfish</a>（GPL-3.0）。
+    <code>engine/</code> に同梱した WebAssembly 版を読み込んでいます。
+    このアプリ自体はビルド不要で、配信しているのは <code>public/</code> の中身だけです。
+  </footer>
 
 </div>
 <script type="module" src="./js/main.js"></script>
