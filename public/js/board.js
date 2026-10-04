@@ -92,8 +92,7 @@ export function renderBoard(rootEl, position, options = {}) {
       square.dataset.column = String(column);
       square.dataset.rank = String(rank);
 
-      const background = squareBackground(mineCount, oppCount);
-      if (background) square.style.background = background;
+      // マスの色付けはしない（利きは数字だけで示す）
 
       const piece = position.board[index];
       if (piece) {

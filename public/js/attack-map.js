@@ -78,6 +78,29 @@ function movementOf(piece) {
 }
 
 /**
+ * そのマスの駒が、この向きに2マス以上進めるか。
+ *
+ * 味方の飛び駒がこの向きに進めるなら、その先も利きとして数え続ける
+ * （そのマスでぶつかり合いが起きたとき、参戦できる駒として数えるため）。
+ * 歩・桂・金・成香のように1マスしか進めない駒では続けない。
+ *
+ * @param {{type: string, owner: string, promoted: boolean}} piece
+ * @param {number} dRank 段の増分（先手から見た向き）
+ * @param {number} dColumn 列の増分
+ * @param {number} forward 手番の向き（先手 1 / 後手 -1）
+ * @returns {boolean}
+ */
+function slidesOnward(piece, dRank, dColumn, forward) {
+  const stepRank = dRank * forward;
+  const pieceForward = piece.owner === "w" ? 1 : -1;
+  for (const [mRank, mColumn, maxSteps] of movementOf(piece)) {
+    if (maxSteps !== SLIDE) continue;
+    if (mRank * pieceForward === stepRank && mColumn === dColumn) return true;
+  }
+  return false;
+}
+
+/**
  * from の駒が to へ動けるか。利きの計算と同じ規則を使う。
  * kif で移動元が省略されているときに、盤面から駒を特定するために使う（仕様4.3.4）。
  * @param {object} position
@@ -137,8 +160,15 @@ export function countAttacks(position) {
       while (steps < maxSteps && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
         const target = boardIndex(c, r);
         squares[target] += 1;
-        // 駒に当たったら、自駒でも数えたうえでそこで止まる
-        if (position.board[target]) break;
+        const blocker = position.board[target];
+        if (blocker) {
+          // 駒に当たったら、そのマスは数えたうえで止まる。
+          // ただし自分の飛び駒がこの向きに2マス以上進めるなら、
+          // その先もこの駒の利きとして数え続ける。
+          const passesOnward =
+            blocker.owner === piece.owner && slidesOnward(blocker, dRank, dColumn, forward);
+          if (!passesOnward) break;
+        }
         r += stepRank;
         c += dColumn;
         steps += 1;
