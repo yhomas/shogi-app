@@ -160,24 +160,25 @@ export function countAttacks(position) {
       const stepRank = dRank * forward;
       let r = rank + stepRank;
       let c = column + dColumn;
-      let steps = 0;
+      // 進める残りのマス数。味方を1つ越えると、その次の1マスぶんだけに減る。
+      let budget = maxSteps;
 
-      while (steps < maxSteps && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
+      while (budget > 0 && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
         const target = boardIndex(c, r);
         squares[target] += 1;
         const blocker = position.board[target];
         if (blocker) {
           // 駒に当たったら、そのマスは数えたうえで止まる。
-          // ただし自分の飛び駒がこの向きに2マス以上進めるなら、
-          // その先もこの駒の利きとして数え続ける。
+          // 味方の飛び駒の場合は、その次の1マスまで数える（2マス目以降は数えない）。
           const passesOnward =
             blocker.owner === piece.owner &&
             passesThrough(blocker, dRank, dColumn, forward, maxSteps);
           if (!passesOnward) break;
+          budget = 2;
         }
         r += stepRank;
         c += dColumn;
-        steps += 1;
+        budget -= 1;
       }
     }
   }
