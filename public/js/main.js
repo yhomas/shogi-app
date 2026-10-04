@@ -14,6 +14,7 @@ import { createInitialPosition, boardIndex } from "./state.js";
 import { boardToSfen, engineToSquare, squareToEngine } from "./coords.js";
 import { countAttacks } from "./attack-map.js";
 import { renderBoard } from "./board.js";
+import { lastMoveMarks } from "./last-move.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
@@ -129,6 +130,23 @@ function selectedIndex() {
   return boardIndex(column, rank);
 }
 
+/**
+ * 直近の手の移動元・移動先（盤面のインデックス）。自分と相手で1手ずつ。
+ *
+ * 直前の手は lastMoveInfo、その前の手は履歴の最後のひかえ（その局面に入る手）にある。
+ */
+function lastMoveIndexes() {
+  const previous = history.length > 0 ? history[history.length - 1].lastMoveInfo : null;
+  const marks = lastMoveMarks({ current: lastMoveInfo, previous, mySide });
+  const toIndex = (square) => {
+    if (!square) return null;
+    const { column, rank } = engineToSquare(square);
+    return boardIndex(column, rank);
+  };
+  const shape = (info) => (info ? { from: toIndex(info.from), to: toIndex(info.to) } : null);
+  return { mine: shape(marks.mine), opp: shape(marks.opp) };
+}
+
 function render() {
   // AIの手番中は利きの表示を消す
   const mode = phase === "thinking" ? "none" : ui.mode.value;
@@ -138,6 +156,7 @@ function render() {
     mySide,
     selected: selectedIndex(),
     destinations: destinationIndexes(),
+    lastMoves: lastMoveIndexes(),
   });
   renderHands();
   renderHeader();

@@ -4,6 +4,9 @@
   --square-line: #c8b48c;
   --mine: #1040a0;
   --opp: #a01010;
+  /* 最後の手の「移動元」に使う薄い色 */
+  --mine-weak: rgba(16, 64, 160, 0.5);
+  --opp-weak: rgba(160, 16, 16, 0.5);
   --pad: 8px;
   --board-border: 3px;
 }
@@ -75,6 +78,33 @@ body {
 
 /* 選んだ駒のマス */
 .sq.selected { box-shadow: inset 0 0 0 3px #d08a00; }
+
+/* 最後の手。自分＝青、相手＝赤。移動元は破線、移動先は太い実線で示す。
+   利きの塗り（背景）と混ざらないよう、背景ではなく枠で描く。 */
+.sq.last-mine-from::before,
+.sq.last-mine-to::before,
+.sq.last-opp-from::before,
+.sq.last-opp-to::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.sq.last-mine-from::before,
+.sq.last-opp-from::before {
+  inset: 2px;
+  border: 2px dashed var(--mine-weak);
+}
+
+.sq.last-opp-from::before { border-color: var(--opp-weak); }
+
+.sq.last-mine-to::before,
+.sq.last-opp-to::before {
+  inset: 1px;
+  border: 3px solid var(--mine);
+}
+
+.sq.last-opp-to::before { border-color: var(--opp); }
 
 /* 移動できるマスは点滅する枠で示す */
 .sq.dest::after {
