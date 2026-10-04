@@ -64,6 +64,7 @@
   <div class="bar kif">
     <label for="kif-file">棋譜（kif）を読む</label>
     <input id="kif-file" type="file" accept=".kif,.txt,text/plain">
+    <button id="kif-clipboard" type="button">クリップボードから読み込む</button>
     <label for="kif-upto">開始手数 <output id="kif-upto-label">0</output></label>
     <input id="kif-upto" type="range" min="0" max="0" value="0" step="1">
     <label for="my-side">自分が指す側</label>
@@ -74,6 +75,13 @@
     <button id="kif-apply" type="button">この局面から対局</button>
   </div>
   <div class="hint" id="kif-status"></div>
+  <details class="paste" id="kif-paste-wrap" hidden>
+    <summary>うまく読み込めないときは、ここに貼り付けてください</summary>
+    <div class="bar">
+      <textarea id="kif-paste" rows="6" placeholder="棋譜のテキストを貼り付けてください"></textarea>
+      <button id="kif-paste-load" type="button">貼り付けた内容を読み込む</button>
+    </div>
+  </details>
 
   <section class="hand" id="hand-opp"></section>
   <div id="board"></div>

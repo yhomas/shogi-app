@@ -55,6 +55,10 @@ const ui = {
   kifUptoLabel: document.getElementById("kif-upto-label"),
   kifApply: document.getElementById("kif-apply"),
   kifStatus: document.getElementById("kif-status"),
+  kifClipboard: document.getElementById("kif-clipboard"),
+  kifPasteWrap: document.getElementById("kif-paste-wrap"),
+  kifPaste: document.getElementById("kif-paste"),
+  kifPasteLoad: document.getElementById("kif-paste-load"),
   mySide: document.getElementById("my-side"),
   checkPanel: document.getElementById("check-panel"),
   checkList: document.getElementById("check-list"),
@@ -460,6 +464,49 @@ ui.itemCondition.addEventListener("change", updateConditionFields);
 {
   const host = ui.itemCondition.closest("details");
   if (host) host.addEventListener("toggle", updateConditionFields);
+}
+
+// ---- 棋譜の読み込み（ファイル・クリップボード・貼り付け） ----
+
+/** 読み込んだ棋譜のテキストを、ファイルと同じ道に流す。 */
+function loadKifText(text, source) {
+  const trimmed = String(text ?? "").trim();
+  if (trimmed === "") {
+    ui.kifStatus.textContent = `${source}に棋譜のテキストがありませんでした。`;
+    return;
+  }
+  ui.kifStatus.textContent = `${source}から読み込んでいます…`;
+  loadKif(trimmed);
+}
+
+/** クリップボードを直接読めないとき、貼り付け欄を出す。 */
+function revealPaste(message) {
+  if (ui.kifPasteWrap) {
+    ui.kifPasteWrap.hidden = false;
+    ui.kifPasteWrap.open = true;
+  }
+  ui.kifStatus.textContent = message;
+}
+
+if (ui.kifClipboard) {
+  ui.kifClipboard.addEventListener("click", async () => {
+    if (!navigator.clipboard || typeof navigator.clipboard.readText !== "function") {
+      revealPaste("このブラウザではクリップボードを直接読めません。下の欄に貼り付けてください。");
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      loadKifText(text, "クリップボード");
+    } catch (error) {
+      revealPaste("クリップボードを読めませんでした。ブラウザの許可が必要です。下の欄に貼り付けてください。");
+    }
+  });
+}
+
+if (ui.kifPasteLoad) {
+  ui.kifPasteLoad.addEventListener("click", () => {
+    loadKifText(ui.kifPaste.value, "貼り付けた内容");
+  });
 }
 
 function addItem() {
