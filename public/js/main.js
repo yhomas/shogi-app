@@ -17,7 +17,7 @@ import { renderBoard } from "./board.js";
 import { lastMoveMark } from "./last-move.js";
 import { parseSquareInput } from "./square-input.js";
 import { describeScore, formatPv } from "./pv-text.js";
-import { shogiMoveText } from "./move-text.js";
+import { shogiMoveText, shogiPvText } from "./move-text.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
@@ -837,12 +837,10 @@ function renderAnalysis(found, maxDepth) {
       const word = describeScore((entry.cp * sign) / 100);
       if (word) score = `${score}（${word}）`;
     }
-    // 候補手（最初の1手）は棋譜の書き方（▲７八金）で、続きは「７六→７五」で出す
+    // 候補手もその続きも、棋譜の書き方（▲７八金）で出す
     let pvText;
     try {
-      pvText = [shogiMoveText(entry.pv[0], position, legalMoves), formatPv(entry.pv.slice(1), 7)]
-        .filter(Boolean)
-        .join(" ");
+      pvText = shogiPvText(entry.pv.slice(0, 8), position, legalMoves);
     } catch (error) {
       pvText = formatPv(entry.pv);
     }

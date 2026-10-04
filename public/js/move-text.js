@@ -4,6 +4,7 @@
 // その局面の合法手が分かるときだけ付ける（分からないときは付けない）。
 
 import { squareToJapanese } from "./pv-text.js";
+import { applyMove } from "./moves.js";
 
 const FILES = "abcdefghi";
 const PIECE_KANJI = { P: "歩", L: "香", N: "桂", S: "銀", G: "金", B: "角", R: "飛", K: "玉" };
@@ -100,3 +101,31 @@ export function shogiMoveText(move, position, legalMoves = null) {
 }
 
 export { nameOf };
+
+/**
+ * 読み筋を、棋譜の書き方で並べる。
+ *
+ * 指し手を順に適用しながら駒の名前を調べるので、2手目以降も「▲７六歩」の形で出る。
+ * 左/右/上/下は「同じ名前の駒がそのマスへ行けるか」で決まるため、その局面の合法手が
+ * 分かっているときだけ付ける（いまは先頭の1手だけ）。
+ *
+ * @param {string[]} pv
+ * @param {object} position 読み筋の出発点の局面
+ * @param {string[]|null} [legalMoves] 出発点の合法手
+ * @returns {string}
+ */
+export function shogiPvText(pv, position, legalMoves = null) {
+  if (!Array.isArray(pv) || pv.length === 0 || !position) return "";
+  const parts = [];
+  // 持ち駒の情報が無い局面でも落ちないようにそろえる
+  let current = position.hands ? position : { ...position, hands: { w: {}, b: {} } };
+  try {
+    pv.forEach((move, index) => {
+      parts.push(shogiMoveText(move, current, index === 0 ? legalMoves : null));
+      current = applyMove(current, move);
+    });
+  } catch (error) {
+    return pv.join(" ");
+  }
+  return parts.join(" ");
+}
