@@ -13,6 +13,9 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 属性は、display を指定している要素にも必ず効かせる */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   padding: var(--pad);

@@ -93,15 +93,42 @@
 
   <details class="settings">
     <summary>チェック項目の登録</summary>
+    <p class="hint">自分の手を指す前に確認したいことを登録します。下の条件に当てはまる局面で指そうとすると、「指す前に確認」が出て、全部に印を付けるまで指せません。</p>
     <div class="bar">
-      <input id="item-text" type="text" placeholder="確認する内容（例: 飛車角を動かしていないか）" size="30">
-      <select id="item-condition"></select>
+      <label>確認する内容
+        <input id="item-text" type="text" placeholder="例: 飛車角を動かしていないか" size="30">
+      </label>
     </div>
     <div class="bar">
-      <label>piece <input id="item-piece" type="text" placeholder="rook_bishop" size="12"></label>
-      <label>squares <input id="item-squares" type="text" placeholder="a1,b2" size="10"></label>
-      <label>count <input id="item-count" type="number" min="0" size="3"></label>
-      <label>ply <input id="item-ply" type="number" min="0" size="3"></label>
+      <label>いつ出すか
+        <select id="item-condition"></select>
+      </label>
+    </div>
+    <p class="hint" id="item-hint"></p>
+    <div class="bar">
+      <label data-field="piece">駒
+        <select id="item-piece">
+          <option value="">（指定しない）</option>
+          <option value="rook,bishop">飛車か角（大駒）</option>
+          <option value="rook">飛車</option>
+          <option value="bishop">角</option>
+          <option value="gold">金</option>
+          <option value="silver">銀</option>
+          <option value="knight">桂</option>
+          <option value="lance">香</option>
+          <option value="pawn">歩</option>
+          <option value="king">玉</option>
+        </select>
+      </label>
+      <label data-field="squares">マス
+        <input id="item-squares" type="text" placeholder="例: ７六（c4 でも可）" size="14">
+      </label>
+      <label data-field="count">数
+        <input id="item-count" type="number" min="0" size="3">
+      </label>
+      <label data-field="ply">手数
+        <input id="item-ply" type="number" min="0" size="3">
+      </label>
       <label>優先度
         <select id="item-priority">
           <option value="high">高</option>
@@ -109,7 +136,7 @@
           <option value="low">低</option>
         </select>
       </label>
-      <button id="item-add" type="button">追加</button>
+      <button id="item-add" type="button">登録する</button>
     </div>
     <p class="hint" id="item-status"></p>
     <ul class="item-list" id="item-list"></ul>

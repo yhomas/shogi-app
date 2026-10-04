@@ -15,6 +15,7 @@ import { boardToSfen, engineToSquare, squareToEngine } from "./coords.js";
 import { countAttacks } from "./attack-map.js";
 import { renderBoard } from "./board.js";
 import { lastMoveMark } from "./last-move.js";
+import { parseSquareInput } from "./square-input.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
@@ -62,6 +63,7 @@ const ui = {
   checkCancel: document.getElementById("check-cancel"),
   itemText: document.getElementById("item-text"),
   itemCondition: document.getElementById("item-condition"),
+  itemHint: document.getElementById("item-hint"),
   itemPiece: document.getElementById("item-piece"),
   itemSquares: document.getElementById("item-squares"),
   itemCount: document.getElementById("item-count"),
@@ -381,7 +383,8 @@ function renderItemList() {
     });
 
     const text = document.createElement("span");
-    text.textContent = `${item.text}（${conditionLabel(item.condition)}／優先度 ${item.priority ?? "normal"}）`;
+    const priorityLabel = { high: "高", normal: "中", low: "低" }[item.priority ?? "normal"] ?? "中";
+    text.textContent = `${item.text}（${conditionLabel(item.condition)}／優先度 ${priorityLabel}）`;
     if (item.priority === "high") text.classList.add("high");
 
     const remove = document.createElement("button");
@@ -402,15 +405,61 @@ function conditionLabel(condition) {
   const found = CONDITION_TYPES.find(([type]) => type === condition.type);
   const base = found ? found[1] : condition.type;
   const extras = [];
-  if (condition.piece) extras.push(`piece=${condition.piece}`);
-  if (condition.squares?.length) extras.push(`squares=${condition.squares.join(",")}`);
-  if (condition.count !== undefined) extras.push(`count=${condition.count}`);
-  if (condition.ply !== undefined) extras.push(`ply=${condition.ply}`);
-  return extras.length ? `${base}（${extras.join(" ") }）` : base;
+  if (condition.piece) extras.push(`駒: ${pieceLabel(condition.piece)}`);
+  if (condition.squares?.length) extras.push(`マス: ${condition.squares.join(" ")}`);
+  if (condition.count !== undefined) extras.push(`持ち駒: ${condition.count}以下`);
+  if (condition.ply !== undefined) extras.push(`手数: ${condition.ply}以上`);
+  return extras.length ? `${base}（${extras.join(" / ")}）` : base;
 }
 
 function persistItems() {
   saveItems(checkItems);
+}
+
+const PIECE_LABELS = {
+  pawn: "歩", lance: "香", knight: "桂", silver: "銀",
+  gold: "金", bishop: "角", rook: "飛車", king: "玉",
+};
+
+/** 「rook,bishop」→「飛車と角」 */
+function pieceLabel(spec) {
+  return String(spec ?? "")
+    .split(/[_,、\s]+/)
+    .filter(Boolean)
+    .map((name) => PIECE_LABELS[name] ?? name)
+    .join("と");
+}
+
+// 条件ごとに、使う入力欄と説明。関係ない欄は隠して、何を入れればよいか分かるようにする。
+const CONDITION_FIELDS = {
+  always: { fields: [], hint: "いつも出します（指定は不要です）。" },
+  opponentMoved: { fields: [], hint: "相手が何か動かしたときに出します（指定は不要です）。" },
+  opponentMovedPiece: { fields: ["piece"], hint: "相手が動かした駒が「駒」に一致するときに出します。" },
+  opponentMovedFrom: { fields: ["squares"], hint: "相手が動かした駒の移動元が「マス」のときに出します。" },
+  opponentMovedTo: { fields: ["squares"], hint: "相手が動かした駒の移動先が「マス」のときに出します。" },
+  opponentInCheck: { fields: [], hint: "自分が相手に王手をかけているときに出します（指定は不要です）。" },
+  myKingThreatened: { fields: [], hint: "自分の玉が相手の利きに入っているときに出します（指定は不要です）。" },
+  myPieceAt: { fields: ["piece", "squares"], hint: "自分の指定の駒が指定のマスにあるときに出します。「駒」と「マス」を指定します。" },
+  handHasPiece: { fields: ["piece"], hint: "自分の指定の駒が持ち駒にあるときに出します。" },
+  handCountAtMost: { fields: ["count"], hint: "自分の持ち駒の合計が「数」以下のときに出します。" },
+  plyAtLeast: { fields: ["ply"], hint: "「手数」以上に進んでいるときに出します。" },
+};
+
+/** 条件に合わせて入力欄を出し分ける。 */
+function updateConditionFields() {
+  const found = CONDITION_FIELDS[ui.itemCondition.value];
+  const fields = found ? found.fields : ["piece", "squares", "count", "ply"];
+  for (const el of document.querySelectorAll("[data-field]")) {
+    el.hidden = !fields.includes(el.dataset.field);
+  }
+  ui.itemHint.textContent = found ? found.hint : "";
+}
+
+ui.itemCondition.addEventListener("change", updateConditionFields);
+// 登録の条件は起動時に並べられるので、パネルを開いた時点でも出し分けをやり直す
+{
+  const host = ui.itemCondition.closest("details");
+  if (host) host.addEventListener("toggle", updateConditionFields);
 }
 
 function addItem() {
@@ -421,7 +470,18 @@ function addItem() {
   }
   const condition = { type: ui.itemCondition.value };
   if (ui.itemPiece.value.trim()) condition.piece = ui.itemPiece.value.trim();
-  const squares = ui.itemSquares.value.split(/[,\s、]+/).filter(Boolean);
+  const rawSquares = ui.itemSquares.value.split(/[,\s、]+/).filter(Boolean);
+  const squares = [];
+  const badSquares = [];
+  for (const entry of rawSquares) {
+    const parsed = parseSquareInput(entry);
+    if (parsed) squares.push(parsed);
+    else badSquares.push(entry);
+  }
+  if (badSquares.length > 0) {
+    setItemStatus(`マスの書き方が分かりません: ${badSquares.join("、")}（例: ７六 または c4）`);
+    return;
+  }
   if (squares.length) condition.squares = squares;
   if (ui.itemCount.value !== "") condition.count = Number(ui.itemCount.value);
   if (ui.itemPly.value !== "") condition.ply = Number(ui.itemPly.value);
