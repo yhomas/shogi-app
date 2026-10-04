@@ -16,6 +16,7 @@ import { countAttacks } from "./attack-map.js";
 import { renderBoard } from "./board.js";
 import { lastMoveMark } from "./last-move.js";
 import { parseSquareInput } from "./square-input.js";
+import { describeScore, formatPv } from "./pv-text.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
@@ -820,7 +821,7 @@ function renderAnalysis(found, maxDepth) {
 
   // エンジンは手番側から見た値を返すので、先手から見た値に直して出す
   const sign = position.turn === "w" ? 1 : -1;
-  ui.analysisSummary.textContent = `読みの深さ ${maxDepth}／評価値は先手から見た値`;
+  ui.analysisSummary.textContent = `読みの深さ ${maxDepth}／評価値は先手から見た値（＋で先手有利）`;
 
   for (const entry of entries) {
     const li = document.createElement("li");
@@ -832,8 +833,10 @@ function renderAnalysis(found, maxDepth) {
       score = "—";
     } else {
       score = formatScore(entry.cp, sign);
+      const word = describeScore((entry.cp * sign) / 100);
+      if (word) score = `${score}（${word}）`;
     }
-    li.textContent = `${score}：${entry.pv.slice(0, 8).join(" ")}`;
+    li.textContent = `${score}：${formatPv(entry.pv)}`;
     ui.pvList.appendChild(li);
   }
 }
