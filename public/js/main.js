@@ -49,6 +49,8 @@ const ui = {
   newGame: document.getElementById("new-game"),
   undo: document.getElementById("undo"),
   mode: document.getElementById("attack-mode"),
+  showMine: document.getElementById("show-mine"),
+  showOpp: document.getElementById("show-opp"),
   message: document.getElementById("message"),
   kifFile: document.getElementById("kif-file"),
   kifUpto: document.getElementById("kif-upto"),
@@ -151,8 +153,9 @@ function lastMoveIndex() {
 }
 
 function render() {
+  syncAttackToggles();
   // AIの手番中は利きの表示を消す
-  const mode = phase === "thinking" ? "none" : ui.mode.value;
+  const mode = phase === "thinking" ? "none" : attackMode();
   renderBoard(ui.board, position, {
     attacks: countAttacks(position),
     mode,
@@ -508,6 +511,46 @@ if (ui.kifPasteLoad) {
     loadKifText(ui.kifPaste.value, "貼り付けた内容");
   });
 }
+
+// ---- 利きの表示の切り替え ----
+//
+// 自分の利きは自分の持ち駒の近く、相手の利きは相手の持ち駒の近くのチェックボックスで
+// 切り替える。1回の操作で済むようにするため。
+
+/** チェックボックスの状態から、表示モードを決める。 */
+function attackMode() {
+  const mine = Boolean(ui.showMine && ui.showMine.checked);
+  const opp = Boolean(ui.showOpp && ui.showOpp.checked);
+  if (mine && opp) return "both";
+  if (mine) return "mine";
+  if (opp) return "opp";
+  return "none";
+}
+
+// 設定の読み込みなどで select の値が変わったとき、チェックボックス側へ反映する。
+// 自分で触ったときは select の方を合わせるので、ここで上書きされることはない。
+let lastModeValue = null;
+
+function syncAttackToggles() {
+  if (!ui.mode) return;
+  if (ui.mode.value === lastModeValue) return;
+  lastModeValue = ui.mode.value;
+  if (ui.showMine) ui.showMine.checked = lastModeValue === "both" || lastModeValue === "mine";
+  if (ui.showOpp) ui.showOpp.checked = lastModeValue === "both" || lastModeValue === "opp";
+}
+
+/** チェックボックスを触ったら、すぐ画面に反映し、設定にも書く。 */
+function onAttackToggle() {
+  if (ui.mode) {
+    ui.mode.value = attackMode();
+    lastModeValue = ui.mode.value;
+    ui.mode.dispatchEvent(new Event("change"));
+  }
+  render();
+}
+
+if (ui.showMine) ui.showMine.addEventListener("change", onAttackToggle);
+if (ui.showOpp) ui.showOpp.addEventListener("change", onAttackToggle);
 
 function addItem() {
   const text = ui.itemText.value.trim();

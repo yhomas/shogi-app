@@ -52,14 +52,15 @@
   <div class="bar">
     <button id="new-game" type="button">新対局</button>
     <button id="undo" type="button">待った</button>
-    <label for="attack-mode">利きの表示</label>
-    <select id="attack-mode">
-      <option value="both" selected>自分と相手</option>
-      <option value="mine">自分だけ</option>
-      <option value="opp">相手だけ</option>
-      <option value="none">表示しない</option>
-    </select>
   </div>
+  <!-- 利きの表示は、持ち駒の近くのチェックボックスで切り替える。
+       設定の保存・読み込みはこの select を通しているので、画面には出さずに残す。 -->
+  <select id="attack-mode" hidden>
+    <option value="both" selected>自分と相手</option>
+    <option value="mine">自分だけ</option>
+    <option value="opp">相手だけ</option>
+    <option value="none">表示しない</option>
+  </select>
 
   <div class="bar kif">
     <label for="kif-file">棋譜（kif）を読む</label>
@@ -83,9 +84,15 @@
     </div>
   </details>
 
-  <section class="hand" id="hand-opp"></section>
+  <div class="hand-row">
+    <section class="hand" id="hand-opp"></section>
+    <label class="attack-toggle"><input id="show-opp" type="checkbox" checked> 相手の利き</label>
+  </div>
   <div id="board"></div>
-  <section class="hand" id="hand-mine"></section>
+  <div class="hand-row">
+    <section class="hand" id="hand-mine"></section>
+    <label class="attack-toggle"><input id="show-mine" type="checkbox" checked> 自分の利き</label>
+  </div>
 
   <div class="message" id="message"></div>
 
