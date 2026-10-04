@@ -265,7 +265,18 @@ function squareIndexOf(engineSquare) {
 function moveInfoFrom(move, beforePosition) {
   if (move.includes("@")) {
     const [letter, to] = move.split("@");
-    return { raw: move, from: null, to, isDrop: true, type: letter.toUpperCase(), promoted: false };
+    // 打つ手は動かした駒が盤上に無いので、持ち主は「その時点の手番」から決める。
+    // ここが抜けていると owner が undefined になり、最後の手の表示（lastMoveMark）と
+    // チェック項目の「相手が指定の駒を動かした」が、打ち手だけ働かなくなる。
+    return {
+      raw: move,
+      from: null,
+      to,
+      isDrop: true,
+      type: letter.toUpperCase(),
+      owner: beforePosition.turn,
+      promoted: false,
+    };
   }
   const from = move.slice(0, 2);
   const to = move.slice(2, 4);
