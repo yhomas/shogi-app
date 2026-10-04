@@ -78,24 +78,29 @@ function movementOf(piece) {
 }
 
 /**
- * そのマスの駒が、この向きに2マス以上進めるか。
+ * ぶつかった味方の駒を越えて、その先も数え続けるか。
  *
- * 味方の飛び駒がこの向きに進めるなら、その先も利きとして数え続ける
- * （そのマスでぶつかり合いが起きたとき、参戦できる駒として数えるため）。
- * 歩・桂・金・成香のように1マスしか進めない駒では続けない。
+ * 条件は2つ:
+ *   - 手前の駒が、その向きに2マス以上進める（香・飛・角など）
+ *   - ぶつかった味方の駒が、同じ向きに進める（1マスでもよい）
  *
- * @param {{type: string, owner: string, promoted: boolean}} piece
+ * たとえば香の前に歩がいる場合、歩も前に進めるので香の利きはその先まで続く。
+ * 桂のように、その向きへ進めない駒で止まる。
+ *
+ * @param {{type: string, owner: string, promoted: boolean}} blocker ぶつかった味方の駒
  * @param {number} dRank 段の増分（先手から見た向き）
  * @param {number} dColumn 列の増分
  * @param {number} forward 手番の向き（先手 1 / 後手 -1）
+ * @param {number} maxSteps 手前の駒の、その向きの最大歩数
  * @returns {boolean}
  */
-function slidesOnward(piece, dRank, dColumn, forward) {
+function passesThrough(blocker, dRank, dColumn, forward, maxSteps) {
+  // 手前の駒が1マスしか進めない向きなら、そもそも越えない
+  if (maxSteps !== SLIDE) return false;
   const stepRank = dRank * forward;
-  const pieceForward = piece.owner === "w" ? 1 : -1;
-  for (const [mRank, mColumn, maxSteps] of movementOf(piece)) {
-    if (maxSteps !== SLIDE) continue;
-    if (mRank * pieceForward === stepRank && mColumn === dColumn) return true;
+  const blockerForward = blocker.owner === "w" ? 1 : -1;
+  for (const [mRank, mColumn] of movementOf(blocker)) {
+    if (mRank * blockerForward === stepRank && mColumn === dColumn) return true;
   }
   return false;
 }
@@ -166,7 +171,8 @@ export function countAttacks(position) {
           // ただし自分の飛び駒がこの向きに2マス以上進めるなら、
           // その先もこの駒の利きとして数え続ける。
           const passesOnward =
-            blocker.owner === piece.owner && slidesOnward(blocker, dRank, dColumn, forward);
+            blocker.owner === piece.owner &&
+            passesThrough(blocker, dRank, dColumn, forward, maxSteps);
           if (!passesOnward) break;
         }
         r += stepRank;

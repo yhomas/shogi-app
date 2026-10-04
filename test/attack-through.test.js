@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { countAttacks } from "../public/js/attack-map.js";
+import { createInitialPosition } from "../public/js/state.js";
 
 const FILES = "abcdefghi";
 function spot(engineSquare) {
@@ -29,11 +30,18 @@ test("飛の後ろに飛がいる（同じ筋）: 前の飛を越えて、その
   assert.equal(w[spot("e5")], 1, "５五（前の飛のマス）は後ろの飛の1");
 });
 
-test("飛の前に歩がいる: 歩は1マスしか進めないので越えない", () => {
+test("飛の前に歩がいる: 歩も前に進めるので、飛はその先まで数える", () => {
   const position = { board: board({ e1: P("R"), e5: P("P") }), hands: {}, turn: "w" };
   const { w } = countAttacks(position);
-  assert.equal(w[spot("e6")], 1, "５四は歩の利きの1だけ（飛は歩で止まる）");
-  assert.equal(w[spot("e7")], 0, "５三には誰も届かない");
+  assert.equal(w[spot("e6")], 2, "５四は2（歩を越えた飛の分と、歩自身の利き）");
+  assert.equal(w[spot("e7")], 1, "５三は1（歩を越えた飛）");
+});
+
+test("初期局面の１六は2、２六は2（香と飛が歩を越える）", () => {
+  const position = createInitialPosition();
+  const { w } = countAttacks(position);
+  assert.equal(w[spot("i4")], 2, "１六は2（１九の香＋１七の歩）");
+  assert.equal(w[spot("h4")], 2, "２六は2（２八の飛＋２七の歩）");
 });
 
 test("香の後ろに香がいる: 同じ向きなら越える", () => {
