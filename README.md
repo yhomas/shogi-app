@@ -42,7 +42,7 @@ tools/check-headers.sh https://<project-id>.web.app/index.html
 ## 同梱しているエンジン
 
 - 名前: Fairy-Stockfish（WebAssembly 版、`fairy-stockfish-nnue.wasm` パッケージ 1.1.12）
-- ライセンス: GPL-3.0（`public/engine/COPYING.txt`）
+- ライセンス: GPL-3.0（全文は `LICENSE`。同梱物の出所と対応するソースは `THIRD-PARTY-NOTICES.md`）
 - 同一オリジンに置いている。`new Worker()` がクロスオリジンの URL を受け付けないため、CDN からは読み込めない。
 - この配布物は NNUE の評価ファイルを含まないため、**古典評価**で動く。同じ深さでもネイティブ版より弱い。
 
