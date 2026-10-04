@@ -88,6 +88,7 @@ const ui = {
   playMode: document.getElementById("play-mode"),
   settingsSave: document.getElementById("settings-save"),
   settingsStatus: document.getElementById("settings-status"),
+  strengthHint: document.getElementById("strength-hint"),
   analysisPanel: document.getElementById("analysis-panel"),
   analysisSummary: document.getElementById("analysis-summary"),
   pvList: document.getElementById("pv-list"),
@@ -154,6 +155,7 @@ function lastMoveIndex() {
 
 function render() {
   syncAttackToggles();
+  updateStrengthFields();
   // AIの手番中は利きの表示を消す
   const mode = phase === "thinking" ? "none" : attackMode();
   renderBoard(ui.board, position, {
@@ -551,6 +553,33 @@ function onAttackToggle() {
 
 if (ui.showMine) ui.showMine.addEventListener("change", onAttackToggle);
 if (ui.showOpp) ui.showOpp.addEventListener("change", onAttackToggle);
+
+// ---- 強さの設定の出し分け ----
+//
+// 使わない欄は隠し、いま何を決めているのかを1行で説明する。
+
+const STRENGTH_HINTS = {
+  depth: "「読みの深さ」を大きくすると強くなります。「手加減」は 20 で全力、小さくすると弱くなります。",
+  elo: "「相手の強さ」をレーティングで指定します。数字が大きいほど強くなります（目安: 初級 900／中級 1300／上級 1800 前後）。この指定では読みの深さは使いません。",
+};
+
+/** 強さの決め方に合わせて、使う欄と説明を出し分ける。 */
+function updateStrengthFields() {
+  const elo = Boolean(ui.modeElo && ui.modeElo.checked);
+  for (const el of document.querySelectorAll("[data-strength]")) {
+    el.hidden = (el.dataset.strength === "elo") !== elo;
+  }
+  if (ui.strengthHint) ui.strengthHint.textContent = STRENGTH_HINTS[elo ? "elo" : "depth"];
+}
+
+if (ui.modeDepth) ui.modeDepth.addEventListener("change", updateStrengthFields);
+if (ui.modeElo) ui.modeElo.addEventListener("change", updateStrengthFields);
+{
+  const host = ui.modeDepth ? ui.modeDepth.closest("details") : null;
+  if (host) host.addEventListener("toggle", updateStrengthFields);
+}
+// パネルは最初から開いているので toggle が来ない。起動時にも一度そろえる。
+updateStrengthFields();
 
 function addItem() {
   const text = ui.itemText.value.trim();

@@ -16,19 +16,32 @@
   <details class="settings" open>
     <summary>強さの設定</summary>
     <div class="bar">
-      <label><input type="radio" name="strength-mode" id="mode-depth" value="depth" checked> 深さ指定</label>
-      <label>深さ <input id="depth" type="number" min="1" max="40" step="1" value="10"></label>
-      <label>Skill Level <input id="skill" type="number" min="-20" max="20" step="1" value="20"></label>
+      <label><input type="radio" name="strength-mode" id="mode-depth" value="depth" checked> 読みの深さで決める</label>
+      <label><input type="radio" name="strength-mode" id="mode-elo" value="elo"> 決まった強さにする（Elo）</label>
     </div>
+    <p class="hint" id="strength-hint"></p>
     <div class="bar">
-      <label><input type="radio" name="strength-mode" id="mode-elo" value="elo"> Elo指定</label>
-      <label>Elo <input id="elo" type="number" min="500" max="2850" step="10" value="1350"></label>
-      <label>スレッド <input id="threads" type="number" min="1" max="8" step="1" value="1"></label>
-      <label>ハッシュ(MB) <input id="hash-mb" type="number" min="16" max="256" step="16" value="64"></label>
-      <label>複数候補 <input id="multi-pv" type="number" min="1" max="10" step="1" value="1"></label>
+      <label data-strength="depth">読みの深さ
+        <input id="depth" type="number" min="1" max="40" step="1" value="10">
+      </label>
+      <label data-strength="skill">手加減（20＝全力、小さいほど弱い）
+        <input id="skill" type="number" min="-20" max="20" step="1" value="20">
+      </label>
+      <label data-strength="elo">相手の強さ（Elo レーティング）
+        <input id="elo" type="number" min="500" max="2850" step="10" value="1350">
+      </label>
     </div>
+    <details>
+      <summary>詳しい設定（ふだんは変えなくて大丈夫です）</summary>
+      <div class="bar">
+        <label>同時に使うCPUの数 <input id="threads" type="number" min="1" max="8" step="1" value="1"></label>
+        <label>使える記憶の上限（MB） <input id="hash-mb" type="number" min="16" max="256" step="16" value="64"></label>
+        <label>検討で出す候補手の数 <input id="multi-pv" type="number" min="1" max="10" step="1" value="1"></label>
+      </div>
+      <p class="hint">CPUの数を増やすと1手あたりが速くなり、記憶を増やすと読みが深くなります（重くもなります）。</p>
+    </details>
     <div class="bar">
-      <label for="play-mode">モード</label>
+      <label for="play-mode">表示モード</label>
       <select id="play-mode">
         <option value="practice" selected>練習（評価値を見せない）</option>
         <option value="study">検討（評価値と候補手を見せる）</option>
@@ -39,7 +52,7 @@
     <p class="note">
       このエンジンは NNUE の評価ファイルを含まないため<strong>古典評価</strong>で動きます。
       同じ深さでもネイティブ版（PC にインストールして動かす版）より弱くなります。
-      相手の強さを合わせたいときは「Elo指定」を使ってください。
+      相手の強さを合わせたいときは「決まった強さにする（Elo）」を使ってください。
     </p>
   </details>
 
