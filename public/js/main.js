@@ -14,7 +14,7 @@ import { createInitialPosition, boardIndex } from "./state.js";
 import { boardToSfen, engineToSquare, squareToEngine } from "./coords.js";
 import { countAttacks } from "./attack-map.js";
 import { renderBoard } from "./board.js";
-import { lastMoveMarks } from "./last-move.js";
+import { lastMoveMark } from "./last-move.js";
 import { createEngine, guardCrossOriginIsolation } from "./usi-engine.js";
 import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveMove } from "./moves.js";
 import { parseKif } from "./kif-parser.js";
@@ -131,20 +131,17 @@ function selectedIndex() {
 }
 
 /**
- * 直近の手の移動元・移動先（盤面のインデックス）。自分と相手で1手ずつ。
- *
- * 直前の手は lastMoveInfo、その前の手は履歴の最後のひかえ（その局面に入る手）にある。
+ * 最新の手の移動元・移動先（盤面のインデックス）。自分・相手を問わず、常に1手だけ。
  */
-function lastMoveIndexes() {
-  const previous = history.length > 0 ? history[history.length - 1].lastMoveInfo : null;
-  const marks = lastMoveMarks({ current: lastMoveInfo, previous, mySide });
+function lastMoveIndex() {
+  const mark = lastMoveMark(lastMoveInfo);
+  if (!mark) return null;
   const toIndex = (square) => {
     if (!square) return null;
     const { column, rank } = engineToSquare(square);
     return boardIndex(column, rank);
   };
-  const shape = (info) => (info ? { from: toIndex(info.from), to: toIndex(info.to) } : null);
-  return { mine: shape(marks.mine), opp: shape(marks.opp) };
+  return { from: toIndex(mark.from), to: toIndex(mark.to), mine: mark.owner === mySide };
 }
 
 function render() {
@@ -156,7 +153,7 @@ function render() {
     mySide,
     selected: selectedIndex(),
     destinations: destinationIndexes(),
-    lastMoves: lastMoveIndexes(),
+    lastMove: lastMoveIndex(),
   });
   renderHands();
   renderHeader();

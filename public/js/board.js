@@ -59,7 +59,7 @@ function pieceGlyph(piece) {
  *   mySide?: "w"|"b",
  *   selected?: string|null,
  *   destinations?: string[],
- *   lastMoves?: {mine: {from: number|null, to: number|null}|null, opp: {from: number|null, to: number|null}|null},
+ *   lastMove?: {from: number|null, to: number|null, mine: boolean}|null,
  * }} [options]
  */
 export function renderBoard(rootEl, position, options = {}) {
@@ -69,7 +69,7 @@ export function renderBoard(rootEl, position, options = {}) {
     mySide = "w",
     selected = null,
     destinations = [],
-    lastMoves = null,
+    lastMove = null,
   } = options;
 
   const oppSide = mySide === "w" ? "b" : "w";
@@ -122,18 +122,16 @@ export function renderBoard(rootEl, position, options = {}) {
         square.classList.add("dest");
       }
 
-      // 最後の手。自分の手は last-mine、相手の手は last-opp。
+      // 最新の手だけに印を付ける（自分・相手を問わず、常に1手だけ）。
       // 移動元は -from、移動先は -to（駒打ちは移動元が無いので -to だけ）。
-      if (lastMoves) {
-        for (const [key, prefix] of [["mine", "last-mine"], ["opp", "last-opp"]]) {
-          const mark = lastMoves[key];
-          if (!mark) continue;
-          if (mark.from !== null && mark.from !== undefined && String(mark.from) === String(index)) {
-            square.classList.add(`${prefix}-from`);
-          }
-          if (mark.to !== null && mark.to !== undefined && String(mark.to) === String(index)) {
-            square.classList.add(`${prefix}-to`);
-          }
+      // 色は誰の手かで変える（自分＝青、相手＝赤）。
+      if (lastMove) {
+        const prefix = lastMove.mine ? "last-mine" : "last-opp";
+        if (lastMove.from !== null && lastMove.from !== undefined && String(lastMove.from) === String(index)) {
+          square.classList.add(`${prefix}-from`);
+        }
+        if (lastMove.to !== null && lastMove.to !== undefined && String(lastMove.to) === String(index)) {
+          square.classList.add(`${prefix}-to`);
         }
       }
 

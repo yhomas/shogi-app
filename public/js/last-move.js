@@ -1,7 +1,7 @@
-// 直近の手を「自分の手」と「相手の手」に振り分ける。
+// 盤面に印を付ける「最新の手」を選ぶ。
 //
+// 自分・相手を問わず、常に最後に指された1手だけを返す（相手が指せば自分の印は消える）。
 // 盤面や履歴そのものは知らず、手の情報（moveInfoFrom が作る形）だけを見る。
-// 表示側は、ここで選ばれた手の移動元・移動先のマスに印を付ける。
 
 /** 手の情報として使えるか（持ち主がいて、少なくとも移動先か移動元がある）。 */
 function usable(info) {
@@ -11,20 +11,16 @@ function usable(info) {
 }
 
 /**
- * 直近の手から、自分と相手の1手ずつを選ぶ。
+ * 最新の手を、印を付けるための形にして返す。
  *
- * current は今の局面に至った手、previous はその前の手。
- * 片方しか無ければ片方だけ、同じ側の手が2つ来た場合は新しい方を採る。
- *
- * @param {{current?: object|null, previous?: object|null, mySide: "w"|"b"}} param
- * @returns {{mine: object|null, opp: object|null}}
+ * @param {object|null} info 最新の手の情報（lastMoveInfo）
+ * @returns {{from: string|null, to: string, owner: "w"|"b"}|null} 手が無ければ null
  */
-export function lastMoveMarks({ current = null, previous = null, mySide }) {
-  const marks = { mine: null, opp: null };
-  for (const info of [current, previous]) {
-    if (!usable(info)) continue;
-    const key = info.owner === mySide ? "mine" : "opp";
-    if (!marks[key]) marks[key] = info;
-  }
-  return marks;
+export function lastMoveMark(info) {
+  if (!usable(info)) return null;
+  return {
+    from: typeof info.from === "string" && info.from !== "" ? info.from : null,
+    to: info.to,
+    owner: info.owner,
+  };
 }
