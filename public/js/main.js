@@ -91,6 +91,7 @@ const ui = {
   settingsStatus: document.getElementById("settings-status"),
   strengthHint: document.getElementById("strength-hint"),
   analysisPanel: document.getElementById("analysis-panel"),
+  analysisNote: document.getElementById("analysis-note"),
   analysisSummary: document.getElementById("analysis-summary"),
   pvList: document.getElementById("pv-list"),
 };
@@ -192,6 +193,7 @@ function render() {
   renderHands();
   syncControlStates();
   renderMessage();
+  updateAnalysisPanelState();
 }
 
 /** 戻る・進むを押せるかどうかを整える（画面の上に手番の文字は出さない）。 */
@@ -846,6 +848,7 @@ async function newGame() {
   lastMoveInfo = null;
   clearSelection();
   closeCheckPanel();
+  clearAnalysis(); // 前の対局の検討を残さない
   setMessage("");
   await refreshLegalMoves();
   if (position.turn === mySide) {
@@ -900,6 +903,7 @@ function writeSettings() {
   ui.pvList.textContent = "";
   ui.analysisPanel.hidden = !studyMode;
   if (!studyMode) ui.analysisSummary.textContent = "";
+  updateAnalysisPanelState();
 }
 
 /** エンジンに強さの設定を送る。深さ指定と Elo 指定は同時に有効にしない。 */
@@ -929,12 +933,35 @@ function formatScore(cp, sign) {
   return `${value > 0 ? "+" : ""}${value}`;
 }
 
+/**
+ * 検討の箱に出すものが無いときは class="empty" を付ける。
+ * 見出しだけの細い帯にして、無駄な縦の余白を残さない。
+ *
+ * まだ対局が始まっていないときは、見出しの横に「対局開始後、内容が表示されます」と添える。
+ */
+function updateAnalysisPanelState() {
+  const empty = ui.pvList.children.length === 0 && ui.analysisSummary.textContent.trim() === "";
+  ui.analysisPanel.classList.toggle("empty", empty);
+
+  const beforeGame = empty && history.length === 0 && plyCount === 0 && phase !== "over";
+  ui.analysisPanel.classList.toggle("before-game", beforeGame);
+  ui.analysisNote.textContent = beforeGame ? "（対局開始後、内容が表示されます）" : "";
+}
+
+/** 検討の表示を空に戻す（新しい対局を始めるときなど）。 */
+function clearAnalysis() {
+  ui.pvList.textContent = "";
+  ui.analysisSummary.textContent = "";
+  updateAnalysisPanelState();
+}
+
 function renderAnalysis(found, maxDepth) {
   const entries = [...found.values()].sort((a, b) => a.multipv - b.multipv).slice(0, STUDY_MULTI_PV);
   ui.pvList.textContent = "";
 
   if (entries.length === 0) {
     ui.analysisSummary.textContent = "候補手を取得できませんでした。";
+    updateAnalysisPanelState();
     return;
   }
 
@@ -965,6 +992,7 @@ function renderAnalysis(found, maxDepth) {
     li.textContent = `${score}：${pvText}`;
     ui.pvList.appendChild(li);
   }
+  updateAnalysisPanelState();
 }
 
 /** 検討モードのときだけ、今の局面を読ませて評価値と候補手を出す。 */
@@ -998,6 +1026,7 @@ async function analyze() {
   } catch (error) {
     unsubscribe();
     ui.analysisSummary.textContent = `検討できませんでした: ${error.message}`;
+    updateAnalysisPanelState();
     return;
   }
   unsubscribe();
@@ -1140,6 +1169,7 @@ async function startFromKif() {
   lastMoveInfo = upto > 0 ? moveInfoFrom(parsedKif.moves[upto - 1], replayed.previousPosition) : null;
   clearSelection();
   closeCheckPanel();
+  clearAnalysis(); // 前の局面の検討を残さない
   mySide = ui.mySide.value;
   setMessage("");
   await refreshLegalMoves();
@@ -1331,7 +1361,8 @@ document.querySelectorAll("[data-close]").forEach((button) => {
 
 
 // ---- 持ち駒の欄を、将棋盤と必ず同じ幅にする ----
-// CSS だけでは盤の実測幅と合わなかったため、実行時に測って合わせる
+// CSS でも同じ式（9マス×--sq＋枠）にしているが、盤の実測幅に合わせて実行時にも合わせる
+// （丸めや折り返しで数pxずれるのを防ぐ）
 {
   const boardEl = document.getElementById("board");
   const syncHandWidth = () => {

@@ -9,6 +9,10 @@
   --opp-weak: rgba(160, 16, 16, 0.5);
   --pad: 8px;
   --board-border: 3px;
+  /* 1マスの大きさ。画面の幅に収まる範囲で、盤と同じ 62px を上限にする。
+     狭い画面では小さくなる（横スクロールを出さないため）。
+     持ち駒の欄も同じ --sq を使うので、盤の外でも使えるようここで決める。 */
+  --sq: clamp(18px, min(calc((100vw - var(--pad) * 2 - var(--board-border) * 2) / 9), calc(65vh / 9)), 62px);
 }
 
 * { box-sizing: border-box; }
@@ -24,19 +28,19 @@ body {
   background: #faf7f2;
 }
 
+/* 盤と持ち駒は、画面の幅に収まるように縮む（横スクロールは出ない）。
+   念のため、何かはみ出したときだけ横スクロールできるようにしておく */
 .app { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; max-width: 100%; overflow-x: auto; }
 
 .notfound { padding: 24px; }
 
 .controls { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 
-/* 盤面。--sq が1マスの大きさで、盤の幅と文字の大きさがここから決まる。
+/* 盤面。--sq が1マスの大きさで、盤の幅と文字の大きさがここから決まる（:root で定義）。
    22px は body の余白(8*2)と外枠(3*2)。
-   タップ領域を44px以上にするため、狭い画面では44pxを下回らないようにする
-   （そのぶん横にはみ出すので、.app を横スクロールできるようにしている）。
+   横幅が足りない画面では、マスが小さくなって収まる（横スクロールを出さない）。
    縦持ちでは画面の高さの65%を上限にして、持ち駒やボタンの場所を残す。 */
 #board {
-  --sq: clamp(44px, min(calc((100vw - var(--pad) * 2 - var(--board-border) * 2) / 9), calc(65vh / 9)), 62px);
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
@@ -217,6 +221,32 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .hint { font-size: 13px; color: #446; min-height: 1.5em; }
 
+/* 検討の箱は、中身が無いときも将棋盤と同じ幅にする（盤は9マス×--sq＋枠） */
+#analysis-panel {
+  width: calc(var(--sq) * 9 + var(--board-border) * 2);
+  max-width: 100%;
+}
+
+/* 出すものが無いときは、上下の余白と空の行を詰めて、高さを小さくする。
+   （見出しだけの細い帯になる） */
+#analysis-panel.empty {
+  padding: 3px 10px;
+}
+
+#analysis-panel.empty h2 { margin-bottom: 0; }
+
+#analysis-panel.empty .hint { display: none; }
+
+/* まだ対局が始まっていないときの、見出しの横の但し書き */
+#analysis-note {
+  display: none;
+  font-size: 12px;
+  font-weight: 400;
+  color: #776a52;
+}
+
+#analysis-panel.before-game #analysis-note { display: inline; }
+
 /* 指す前の確認パネル */
 .panel {
   border: 2px solid #d08a00;
@@ -271,7 +301,8 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .footer { font-size: 12px; color: #666; line-height: 1.7; max-width: 640px; padding-top: 4px; }
 
-/* タッチで操作する画面では、指で押せる大きさ（44px以上）を確保する */
+/* タッチで操作する画面では、指で押せる大きさ（44px以上）を確保する。
+   ただし盤と持ち駒は、画面の幅に収まるよう小さくなる（横スクロールを出さない） */
 @media (max-width: 700px), (pointer: coarse) {
   :root { --pad: 6px; }
 
@@ -280,8 +311,6 @@ button:disabled { opacity: 0.45; cursor: default; }
   input[type="text"],
   input[type="number"],
   button { min-height: 44px; }
-
-  .hand-piece { min-width: 48px; }
 }
 
 
@@ -445,11 +474,13 @@ dialog .settings {
 }
 
 
-/* 持ち駒の欄は、駒の数によらず将棋盤と同じ幅にする（盤は9マス×44px＋枠で402px） */
+/* 持ち駒の欄は、駒の数によらず将棋盤と同じ幅にする（盤は9マス×--sq＋枠）。
+   --sq は :root にあるので、盤の外でも使える。初期値も盤とぴったり同じになる */
 #hand-mine,
 #hand-opp {
-  width: calc(var(--sq) * 9 + 6px);
+  width: calc(var(--sq) * 9 + var(--board-border) * 2);
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* 利きのチェックボックスは「進む」の右横に並べる */
@@ -458,16 +489,6 @@ dialog .settings {
   align-items: center;
   gap: 4px;
   margin-left: 6px;
-}
-
-
-/* 持ち駒の欄は、駒の数によらず将棋盤と同じ幅（実測 402px）にする。
-   ※ var(--sq) は盤の外では使えないため、実測値をそのまま指定する */
-#hand-mine,
-#hand-opp {
-  width: 402px; /* JS が盤の実測幅で上書きする。これは初期値 */
-  max-width: 100%;
-  box-sizing: border-box;
 }
 
 
@@ -527,15 +548,15 @@ dialog .settings {
 }
 
 /* 持ち駒を、盤上の駒とまったく同じ大きさ・形にする。
-   盤上: マス44px × 種類の比率（--piece-scale） × 0.92、文字はその0.52。
+   盤上: マス--sq × 種類の比率（--piece-scale） × 0.92、文字はその0.52。
    ・ボタンの既定（背景・枠線・影・余白）は消す
    ・持ち駒の箱は幅を盤に合わせて固定しているため、入りきらないと flex の既定で縮む。
      min-width: auto と flex-shrink: 0 で縮小を禁じ、常に盤上と同じ大きさで出す */
 button.hand-piece,
 .hand .hand-piece {
-  width: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
-  height: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
-  font-size: calc(44px * var(--piece-scale, 0.85) * 0.52) !important;
+  width: calc(var(--sq) * var(--piece-scale, 0.85) * 0.92) !important;
+  height: calc(var(--sq) * var(--piece-scale, 0.85) * 0.92) !important;
+  font-size: calc(var(--sq) * var(--piece-scale, 0.85) * 0.52) !important;
   align-self: center !important;
   flex: 0 0 auto !important;
   flex-shrink: 0 !important;
