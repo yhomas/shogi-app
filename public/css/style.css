@@ -278,18 +278,39 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* ---- 盤面と駒の色味と影（参考画像に合わせる） ---- */
 
-/* 盤の木目。実測 rgb(252,192,115) 付近 */
+/* 盤。罫線はマスごとの枠ではなく「盤に1pxの線を繰り返し描く」方式にした。
+   枠だと、マスの大きさが端数だとブラウザごとに太さが変わってしまう。
+   マスは --sq（44px の整数）で割り切れるので、線が常に同じ太さで出る。
+   星（黒丸）は3/9と6/9の交点に4つ。 */
 #board {
-  background:
+  background-color: #f9bd6e;
+  background-image:
+    radial-gradient(circle, #1a1207 0 3px, transparent 3px),
+    radial-gradient(circle, #1a1207 0 3px, transparent 3px),
+    radial-gradient(circle, #1a1207 0 3px, transparent 3px),
+    radial-gradient(circle, #1a1207 0 3px, transparent 3px),
+    linear-gradient(90deg, rgba(90, 60, 25, 0.75) 0 1px, transparent 1px),
+    linear-gradient(180deg, rgba(90, 60, 25, 0.75) 0 1px, transparent 1px),
     repeating-linear-gradient(90deg, rgba(120, 80, 30, 0.05) 0 2px, rgba(255, 255, 255, 0) 2px 13px),
     linear-gradient(180deg, #fdc476 0%, #f9bd6e 35%, #f6b868 65%, #f2b262 100%);
-}
-.sq {
-  border-color: rgba(90, 60, 25, 0.75);
+  background-size:
+    7px 7px, 7px 7px, 7px 7px, 7px 7px,
+    var(--sq) var(--sq), var(--sq) var(--sq), auto, auto;
+  background-position:
+    calc(var(--sq) * 3 - 3.5px) calc(var(--sq) * 3 - 3.5px),
+    calc(var(--sq) * 6 - 3.5px) calc(var(--sq) * 3 - 3.5px),
+    calc(var(--sq) * 3 - 3.5px) calc(var(--sq) * 6 - 3.5px),
+    calc(var(--sq) * 6 - 3.5px) calc(var(--sq) * 6 - 3.5px),
+    0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat;
 }
 
-/* 駒の本体（五角形）。切り抜きはこの層だけに掛けるので、影が切り取られない。
-   z-index: -1 で文字の後ろに置く */
+/* マスの枠線は消す（罫線は盤側に描くため）。太さがブラウザで変わらない */
+.sq {
+  border-color: transparent;
+}
+
+/* 駒の本体（五角形）。切り抜きはこの層だけに掛けるので、影が切り取られない */
 .piece::before {
   content: "";
   position: absolute;
@@ -300,8 +321,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 
 /* 盤に落ちる駒の影。左上から光が当たり、右下へ落ちる。
-   駒だけに掛かり、マスの罫線や利きの数字には掛からない。
-   近い影は濃すぎないよう駒の色（木）に近い茶色にし、遠い影は薄く小さくする */
+   駒だけに掛かり、マスの罫線や利きの数字には掛からない */
 .piece {
   filter: drop-shadow(2px 2px 0 rgba(130, 95, 50, 0.8))
     drop-shadow(5px 6px 4px rgba(120, 85, 45, 0.5))
