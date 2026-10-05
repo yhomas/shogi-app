@@ -9,18 +9,6 @@
 <body>
 <div class="app">
 
-  <header class="bar">
-    <div class="turn" id="turn">読み込み中…</div>
-<div class="toolbar">
-  <button id="open-strength" type="button">強さ</button>
-  <button id="open-check" type="button">チェック項目</button>
-  <button id="open-kif" type="button">棋譜を読み込む</button>
-  <button id="open-view" type="button">表示</button>
-</div>
-  </header>
-
-
-
   <div class="bar">
     <button id="new-game" type="button">新対局</button>
     <button id="undo" type="button">待った</button><button id="redo" type="button">進む</button>
@@ -41,13 +29,13 @@
   <div class="hand-row">
     <section class="hand" id="hand-opp"></section>
   </div>
+  <!-- 自分の手番になったら、その局面で当てはまるチェック項目を出す（手を指す前）-->
   <section class="panel" id="check-panel" hidden>
-    <h2>指す前に確認</h2>
+    <h2>この手番のチェック</h2>
     <p class="hint" id="check-move"></p>
     <ul class="check-list" id="check-list"></ul>
     <div class="bar">
-      <button id="check-play" type="button" disabled>指す</button>
-      <button id="check-cancel" type="button">この手をやめる</button>
+      <button id="check-close" type="button">閉じる</button>
     </div>
   </section>
 
@@ -63,6 +51,14 @@
     <p class="hint" id="analysis-summary"></p>
     <ol class="pv-list" id="pv-list"></ol>
   </section>
+
+  <!-- 設定を開くボタンは、検討の箱の下に置く -->
+  <div class="toolbar">
+    <button id="open-strength" type="button">相手強さ</button>
+    <button id="open-check" type="button">思考チェック編集</button>
+    <button id="open-kif" type="button">棋譜読込</button>
+    <button id="open-view" type="button">表示モード</button>
+  </div>
 
 
 

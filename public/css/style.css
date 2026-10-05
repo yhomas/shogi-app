@@ -157,8 +157,6 @@ body {
   font-size: 14px;
 }
 
-.turn { font-weight: 700; }
-
 .depth input {
   width: 4em;
   font-size: 14px;
@@ -197,6 +195,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .hand-piece.selected { box-shadow: inset 0 0 0 2px #d08a00; }
 
 .message { min-height: 1.5em; font-size: 14px; color: #a01010; }
+
+/* 手番の様子（エラーではない知らせ）は赤くしない */
+.message.state { color: #5f5647; }
 
 .kif input[type="file"] { font-size: 13px; max-width: 220px; }
 
@@ -494,6 +495,27 @@ dialog .settings {
     drop-shadow(9px 12px 8px rgba(110, 80, 40, 0.35));
 }
 
+
+/* 持ち駒1つ分の入れ物。駒と枚数を横に並べ、どちらも縮めない */
+.hand-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+/* 同じ駒を複数持っているときの枚数。駒の外（右横）に出す。
+   駒の中に数まで入れると、駒の字が数の分だけ押されて中央からずれる。
+   文字は駒の行書体ではなく、画面の書体のまま小さく出す */
+.hand-count {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: #3a2607;
+  white-space: nowrap;
+}
 
 /* 持ち駒を、盤上の駒とまったく同じ大きさ・形にする。
    盤上: マス44px × 種類の比率（--piece-scale） × 0.92、文字はその0.52。

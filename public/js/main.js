@@ -44,7 +44,6 @@ const CONDITION_TYPES = [
 
 const ui = {
   board: document.getElementById("board"),
-  turn: document.getElementById("turn"),
   depth: document.getElementById("depth"),
   handMine: document.getElementById("hand-mine"),
   handOpp: document.getElementById("hand-opp"),
@@ -68,8 +67,7 @@ const ui = {
   checkPanel: document.getElementById("check-panel"),
   checkList: document.getElementById("check-list"),
   checkMove: document.getElementById("check-move"),
-  checkPlay: document.getElementById("check-play"),
-  checkCancel: document.getElementById("check-cancel"),
+  checkClose: document.getElementById("check-close"),
   itemText: document.getElementById("item-text"),
   itemCondition: document.getElementById("item-condition"),
   itemHint: document.getElementById("item-hint"),
@@ -108,11 +106,9 @@ let mySide = "w";
 let engine = null;
 let parsedKif = null;
 let checkItems = [];
-let confirmedMoves = new Set();
 let redoStack = [];
 let lastMoveInfo = null;
 let plyCount = 0;
-let pendingMove = null;
 let settings = null;
 let studyMode = false;
 let analysisToken = 0;
@@ -120,8 +116,31 @@ let analysisToken = 0;
 const opponentOf = (side) => (side === "w" ? "b" : "w");
 const sideName = (side) => (side === "w" ? "先手" : "後手");
 
+// 盤の下に出す、伝えるべき文言（エラー・終局の知らせなど）。
+// 空のときは、手番の様子（AIが考えています… など）を出す。
+let messageOverride = "";
+
 function setMessage(text) {
-  ui.message.textContent = text;
+  messageOverride = text;
+  renderMessage();
+}
+
+/** 手番の様子。画面の上に手番の行を置かなくなったので、ここに出す。 */
+function stateMessage() {
+  const side = sideName(position.turn);
+  if (phase === "thinking") return `${side}　AIが考えています…`;
+  if (phase === "human") {
+    return position.turn === mySide ? `${side}　あなたの手番です` : `${side}　AIの手番です`;
+  }
+  if (phase === "over") return "終局";
+  return "準備中";
+}
+
+/** 盤の下の表示。伝えるべき文言があればそれを、無ければ手番の様子を出す。 */
+function renderMessage() {
+  ui.message.textContent = messageOverride || stateMessage();
+  // 手番の様子は、赤いエラー表示と区別できる色にする
+  ui.message.classList.toggle("state", messageOverride === "");
 }
 
 function clearSelection() {
@@ -171,17 +190,12 @@ function render() {
     lastMove: lastMoveIndex(),
   });
   renderHands();
-  renderHeader();
+  syncControlStates();
+  renderMessage();
 }
 
-function renderHeader() {
-  const turn = position.turn === mySide ? "あなた" : "AI";
-  const state =
-    phase === "thinking" ? "AIが考えています…"
-    : phase === "over" ? "終局"
-    : phase === "human" ? "あなたの手番です"
-    : "準備中";
-  ui.turn.textContent = `${sideName(position.turn)} ${turn}／${state}`;
+/** 戻る・進むを押せるかどうかを整える（画面の上に手番の文字は出さない）。 */
+function syncControlStates() {
   ui.undo.disabled = history.length === 0 || phase === "thinking" || phase === "idle";
   ui.redo.disabled = redoStack.length === 0 || phase === "thinking";
 }
@@ -198,6 +212,11 @@ function renderHand(host, hand, clickable) {
     const count = hand[type] ?? 0;
     if (count === 0) continue;
     any = true;
+    // 駒と枚数を、1つの入れ物（.hand-item）にまとめる。
+    // 枚数を駒の中に入れると、駒の字が数の分だけ押されて中央からずれるため、
+    // 枚数は駒の外（右横）に別の要素として出す。
+    const item = document.createElement("span");
+    item.className = "hand-item";
     const el = document.createElement("button");
     el.type = "button";
     el.className = "hand-piece";
@@ -211,8 +230,17 @@ function renderHand(host, hand, clickable) {
     } else {
       el.disabled = true;
     }
-    el.textContent = `${HAND_LABELS[type]}${count > 1 ? `×${count}` : ""}`;
-    host.appendChild(el);
+    el.textContent = HAND_LABELS[type];
+    // 画面には枚数を別に出しているので、読み上げ用の名前にも枚数を持たせる
+    el.setAttribute("aria-label", count > 1 ? `${HAND_LABELS[type]} ${count}枚` : HAND_LABELS[type]);
+    item.appendChild(el);
+    if (count > 1) {
+      const countEl = document.createElement("span");
+      countEl.className = "hand-count";
+      countEl.textContent = `×${count}`;
+      item.appendChild(countEl);
+    }
+    host.appendChild(item);
   }
   if (!any) host.textContent = "持ち駒なし";
 }
@@ -275,7 +303,9 @@ function playHumanMove(from, to) {
     // 成るか成らないかを本人に選んでもらう
     move = window.confirm("成りますか？") ? choice.promoted : choice.plain;
   }
-  requestMoveConfirmation(move);
+  // 検討（go depth）が走っていると bestmove の受け取りが混ざるので止める
+  cancelAnalysis();
+  commitMove(move);
 }
 
 // ---- 指す前のチェック ----
@@ -329,21 +359,30 @@ function buildContext() {
 function closeCheckPanel() {
   ui.checkPanel.hidden = true;
   ui.checkList.textContent = "";
-  pendingMove = null;
+  ui.checkMove.textContent = "";
 }
 
-/** これから指す手を、検討と同じ書き方（▲７八金）で示す。 */
-function describePendingMove(move) {
+/** 相手の直前の手を、棋譜と同じ書き方（△３四歩）で示す。無ければ空文字。 */
+function describeLastMove() {
+  if (!lastMoveInfo) return "";
+  // 直前の局面は、履歴の最後の1件（手を指す直前に控えた局面）
+  const before = history[history.length - 1];
+  if (!before) return "";
   try {
-    return shogiMoveText(move, position, legalMoves);
+    return shogiMoveText(lastMoveInfo.raw, before.position, before.legalMoves);
   } catch (error) {
-    return move;
+    return "";
   }
 }
 
-function openCheckPanel(move, items) {
-  pendingMove = move;
-  ui.checkMove.textContent = `これから指す手: ${describePendingMove(move)}`;
+/**
+ * この手番で確かめることを出す。
+ *
+ * 以前は「手を選んだ後の確認」だったが、自分の手番が来た時点（指す前）に見せる。
+ */
+function openCheckPanel(items) {
+  const last = describeLastMove();
+  ui.checkMove.textContent = last ? `相手の直前の手: ${last}` : "あなたの手番です。";
   ui.checkList.textContent = "";
 
   for (const item of items) {
@@ -351,9 +390,6 @@ function openCheckPanel(move, items) {
     const label = document.createElement("label");
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.addEventListener("change", () => {
-      ui.checkPlay.disabled = ![...ui.checkList.querySelectorAll("input[type=checkbox]")].every((b) => b.checked);
-    });
     const text = document.createElement("span");
     text.textContent = item.text;
     if (item.priority === "high") text.classList.add("high");
@@ -362,29 +398,31 @@ function openCheckPanel(move, items) {
     ui.checkList.appendChild(li);
   }
 
-  ui.checkPlay.disabled = items.length > 0;
   ui.checkPanel.hidden = false;
   ui.checkPanel.scrollIntoView({ block: "nearest" });
+}
+
+/**
+ * 自分の手番になったら、いまの局面で当てはまる項目を出す。
+ * 当てはまる項目が無いとき、自分の手番でないときは隠す。
+ */
+function showTurnChecks() {
+  if (phase !== "human" || position.turn !== mySide) {
+    closeCheckPanel();
+    return;
+  }
+  const items = evaluate(checkItems, buildContext());
+  if (items.length === 0) {
+    closeCheckPanel();
+    return;
+  }
+  openCheckPanel(items);
 }
 
 /** 進行中の検討を打ち切る。エンジンは1つなので、着手の前に必ず止める。 */
 function cancelAnalysis() {
   analysisToken += 1; // 進行中の検討結果を捨てる
   if (engine) engine.stop();
-}
-
-/** 指す前に条件を評価する。出す項目が無ければそのまま指す。 */
-function requestMoveConfirmation(move) {
-  // 検討（go depth）が走っていると bestmove の受け取りが混ざるので止める
-  cancelAnalysis();
-  const key = `${boardToSfen(position)}|${move}`;
-  const items = evaluate(checkItems, buildContext());
-
-  if (items.length === 0 || confirmedMoves.has(key)) {
-    commitMove(move);
-    return;
-  }
-  openCheckPanel(move, items);
 }
 
 // ---- チェック項目の登録 ----
@@ -668,8 +706,6 @@ async function refreshLegalMoves() {
 }
 
 async function commitMove(move) {
-  // 同じ局面で同じ手を二度確認しないように記録する
-  confirmedMoves.add(`${boardToSfen(position)}|${move}`);
   const info = moveInfoFrom(move, position);
   redoStack = []; // 新しく指したら、進める先は消える
   history.push({ position, legalMoves, lastMoveInfo, plyCount });
@@ -698,6 +734,7 @@ function afterMove() {
   if (position.turn === mySide) {
     phase = "human";
     render();
+    showTurnChecks(); // 自分の手番になったので、確かめることを出す
     maybeAnalyze();
     return;
   }
@@ -706,6 +743,7 @@ function afterMove() {
 
 function finishWithMate() {
   phase = "over";
+  closeCheckPanel();
   const text = position.turn === mySide ? "詰みました。あなたの負けです。" : "詰みました。あなたの勝ちです。";
   setMessage(text);
   showResult(text); // 盤の下の文字だけでなく、ダイアログでも知らせる
@@ -737,6 +775,7 @@ async function runEngineTurn() {
     await refreshLegalMoves();
     phase = position.turn === mySide ? "human" : "thinking";
     render();
+    if (phase === "human") showTurnChecks(); // 自分の手番になった
     if (legalMoves.length === 0) finishWithMate();
     else maybeAnalyze();
   } catch (error) {
@@ -758,13 +797,15 @@ function undo() {
   legalMoves = snapshot.legalMoves;
   lastMoveInfo = snapshot.lastMoveInfo ?? null;
   plyCount = snapshot.plyCount ?? 0;
-  // 確認パネルを開いたまま戻すと、古い手を今の局面に対して指してしまう
+  // 戻すと、出ている項目が前の局面のものになるので、いったん閉じる
+  // （戻した先が自分の手番なら、showTurnChecks が今の局面で出し直す）
   closeCheckPanel();
   clearSelection();
   setMessage("");
   // 戻した局面では、AIに指させない（履歴をなぞるだけ）
   phase = "human";
   render();
+  showTurnChecks();
   // 検討の評価値・候補手も、戻した局面に合わせて読み直す
   maybeAnalyze();
 }
@@ -787,6 +828,7 @@ function redo() {
   const atLiveEnd = redoStack.length === 0;
   phase = atLiveEnd && position.turn !== mySide ? "thinking" : "human";
   render();
+  if (phase === "human") showTurnChecks();
   maybeAnalyze();
   if (atLiveEnd && position.turn !== mySide) runEngineTurn();
 }
@@ -795,7 +837,6 @@ async function newGame() {
   if (!needEngine()) return;
   position = createInitialPosition();
   history = [];
-  confirmedMoves = new Set();
   redoStack = [];
   plyCount = 0;
   lastMoveInfo = null;
@@ -806,6 +847,7 @@ async function newGame() {
   if (position.turn === mySide) {
     phase = "human";
     render();
+    showTurnChecks();
   } else {
     runEngineTurn();
   }
@@ -1090,7 +1132,6 @@ async function startFromKif() {
 
   position = replayed.position;
   history = [];
-  confirmedMoves = new Set();
   plyCount = upto;
   lastMoveInfo = upto > 0 ? moveInfoFrom(parsedKif.moves[upto - 1], replayed.previousPosition) : null;
   clearSelection();
@@ -1104,10 +1145,15 @@ async function startFromKif() {
     `${upto}手目から対局します（あなたは${sideText}／2手先までのノード数: ${nodes}）。`,
   );
 
+  // 対局が始まったので、棋譜のダイアログは閉じる。
+  // （棋譜が読めなかったときは理由を #kif-status に出しているので、開いたままにする）
+  document.getElementById("dlg-kif")?.close();
+
   if (position.turn === mySide) {
     phase = legalMoves.length === 0 ? "over" : "human";
     render();
     if (phase === "over") finishWithMate();
+    else showTurnChecks();
   } else {
     runEngineTurn();
   }
@@ -1141,19 +1187,13 @@ ui.mySide.addEventListener("change", () => {
   // 対局中でも自分の側を切り替えられるようにする
   mySide = ui.mySide.value;
   render();
-  if (position.turn !== mySide && phase !== "over") runEngineTurn();
+  if (position.turn === mySide && phase !== "over") showTurnChecks();
+  else if (position.turn !== mySide && phase !== "over") runEngineTurn();
 });
 
 ui.kifApply.addEventListener("click", startFromKif);
 
-ui.checkPlay.addEventListener("click", () => {
-  if (!pendingMove) return;
-  const move = pendingMove;
-  closeCheckPanel();
-  commitMove(move);
-});
-
-ui.checkCancel.addEventListener("click", () => {
+ui.checkClose.addEventListener("click", () => {
   closeCheckPanel();
   clearSelection();
   render();
@@ -1258,7 +1298,6 @@ window.__app = {
   get parsedKif() { return parsedKif; },
   get mySide() { return mySide; },
   get checkItems() { return checkItems; },
-  get pendingMove() { return pendingMove; },
   get lastMoveInfo() { return lastMoveInfo; },
   get settings() { return settings; },
   get studyMode() { return studyMode; },
@@ -1367,6 +1406,7 @@ function syncResignButton() {
     resign.addEventListener("click", () => {
       if (phase !== "human" && phase !== "thinking") return;
       phase = "over";
+      closeCheckPanel();
       clearSelection();
       const text = "あなたが投了しました。相手の勝ちです。";
       setMessage(text);
