@@ -645,6 +645,24 @@ function addItem() {
   setItemStatus(`追加しました: ${text}`);
 }
 
+/**
+ * エンジンがまだ使える状態かを確かめる。使えないときは理由を盤の下に出して false。
+ *
+ * 起動直後はエンジンの読み込みが終わっていない（engine が null）。
+ * その間にボタンを押されても例外で落ちないよう、エンジンを使う入口で必ず通す。
+ * @returns {boolean} 使えるなら true
+ */
+function needEngine() {
+  if (engine) return true;
+  // 読み込みの途中（phase が idle）のときだけ、待つように知らせる。
+  // 読み込みに失敗したときは phase が "over" で、boot が理由を出しているので消さない。
+  if (phase !== "over") {
+    setMessage("エンジンを読み込んでいます。読み込みが終わってから操作してください。");
+  }
+  render();
+  return false;
+}
+
 async function refreshLegalMoves() {
   legalMoves = await enumerateLegalMoves(engine, position);
 }
@@ -695,6 +713,7 @@ function finishWithMate() {
 }
 
 async function runEngineTurn() {
+  if (!needEngine()) return;
   phase = "thinking";
   render();
   try {
@@ -773,6 +792,7 @@ function redo() {
 }
 
 async function newGame() {
+  if (!needEngine()) return;
   position = createInitialPosition();
   history = [];
   confirmedMoves = new Set();
@@ -962,7 +982,7 @@ function kifPositionAt(upto) {
 
 /** 既定は「再現した局面の手番側を自分が指す」。 */
 async function syncDefaultSide() {
-  if (!parsedKif) return;
+  if (!parsedKif || !engine) return;
   const replayed = await kifPositionAt(Number(ui.kifUpto.value));
   if (replayed.invalidAtIndex === -1) ui.mySide.value = replayed.position.turn;
 }
@@ -1048,6 +1068,7 @@ async function startFromKif() {
     return;
   }
   if (phase === "thinking") return;
+  if (!needEngine()) return;
 
   const upto = Number(ui.kifUpto.value);
   const replayed = await kifPositionAt(upto);

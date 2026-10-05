@@ -418,43 +418,8 @@ dialog .settings {
 }
 
 
-/* 持ち駒の外側に出る四角（ボタンの既定の背景・枠線・影）を消し、
-   盤上の駒と同じ大きさ・形にする。既存の指定より強く効かせる */
-button.hand-piece,
-.hand .hand-piece {
-  width: 30px !important;
-  height: 33px !important;
-  min-width: 0 !important;
-  background: none !important;
-  border: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  box-shadow: none !important;
-  outline: none;
-}
-
-
-/* 持ち駒の行は flex で高さが引き伸ばされるため、伸ばしを止めて
-   盤上の駒と同じ比率（幅30 × 高さ33）に固定する */
-button.hand-piece,
-.hand .hand-piece {
-  align-self: center !important;
-  flex: 0 0 auto !important;
-  width: 30px !important;
-  height: 33px !important;
-  min-height: 0 !important;
-  max-height: 33px !important;
-}
-
-
-/* 盤上の駒は正方形（実測 29x29）なので、持ち駒も同じ比率（1:1）にそろえる */
-button.hand-piece,
-.hand .hand-piece {
-  width: 30px !important;
-  height: 30px !important;
-  min-height: 0 !important;
-  max-height: 30px !important;
-}
+/* 持ち駒の大きさ・形の指定は、このファイルの末尾に1か所だけ置いてある。
+   ここには何度も書き足して上書きし合っていたため、まとめた。 */
 
 
 /* 持ち駒の表示部分も、将棋盤と同じ「木の面＋罫線」の四角で囲む */
@@ -530,40 +495,28 @@ button.hand-piece,
 }
 
 
-/* 持ち駒の駒は、盤上の駒と同じ幅（30px）にそろえ、
-   高さは実物の駒らしく少し高く（33px）する */
-button.hand-piece,
-.hand .hand-piece {
-  width: 30px !important;
-  height: 33px !important;
-  max-height: 33px !important;
-}
-
-
-/* 持ち駒の駒を、盤上の駒とまったく同じ計算式で大きくする。
-   盤上: マス44px × 種類の比率 × 0.92 、文字はその0.52 */
+/* 持ち駒を、盤上の駒とまったく同じ大きさ・形にする。
+   盤上: マス44px × 種類の比率（--piece-scale） × 0.92、文字はその0.52。
+   ・ボタンの既定（背景・枠線・影・余白）は消す
+   ・持ち駒の箱は幅を盤に合わせて固定しているため、入りきらないと flex の既定で縮む。
+     min-width: auto と flex-shrink: 0 で縮小を禁じ、常に盤上と同じ大きさで出す */
 button.hand-piece,
 .hand .hand-piece {
   width: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
   height: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
-  min-height: 0 !important;
-  max-height: none !important;
   font-size: calc(44px * var(--piece-scale, 0.85) * 0.52) !important;
-}
-
-
-/* 持ち駒の箱は幅を盤に合わせて固定しているため、駒が入りきらないと
-   flex の既定で縮んでしまう（min-width:0 を指定していたのも縮小を許す原因）。
-   縮小を禁止して、常に盤上と同じ大きさで表示する */
-button.hand-piece,
-.hand .hand-piece {
+  align-self: center !important;
   flex: 0 0 auto !important;
   flex-shrink: 0 !important;
   min-width: auto !important;
-  width: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
-  height: calc(44px * var(--piece-scale, 0.85) * 0.92) !important;
+  min-height: 0 !important;
   max-height: none !important;
-  font-size: calc(44px * var(--piece-scale, 0.85) * 0.52) !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  outline: none;
 }
 
 /* 駒が多いときは、箱の中で折り返して全部見えるようにする */
