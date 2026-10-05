@@ -103,10 +103,9 @@
   </details>
 </dialog>
 <dialog id="dlg-check">
-  <div class="dialog-head"><h2>チェック項目の登録</h2><button type="button" class="dialog-close" data-close="dlg-check">閉じる</button></div>
-  <details class="settings">
-    <summary>チェック項目の登録</summary>
-    <p class="hint">自分の手を指す前に確認したいことを登録します。下の条件に当てはまる局面で指そうとすると、「指す前に確認」が出て、全部に印を付けるまで指せません。</p>
+  <div class="dialog-head"><h2>思考チェック編集</h2><button type="button" class="dialog-close" data-close="dlg-check">閉じる</button></div>
+  <div class="settings">
+    <p class="hint">自分の手番が来たときに確かめたいことを登録します。下の条件に当てはまる局面で自分の手番になると、「この手番のチェック」に出ます。</p>
     <div class="bar">
       <label>確認する内容
         <input id="item-text" type="text" placeholder="例: 飛車角を動かしていないか" size="30">
@@ -153,7 +152,7 @@
     </div>
     <p class="hint" id="item-status"></p>
     <ul class="item-list" id="item-list"></ul>
-  </details>
+  </div>
 </dialog>
 <dialog id="dlg-result">
   <div class="dialog-head"><h2>対局の結果</h2><button type="button" class="dialog-close" data-close="dlg-result">閉じる</button></div>

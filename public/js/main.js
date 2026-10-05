@@ -443,6 +443,9 @@ function renderItemList() {
   for (const item of checkItems) {
     const li = document.createElement("li");
 
+    // 有効／無効の切り替え。何の切り替えか分かるように文字を添える
+    const enabledLabel = document.createElement("label");
+    enabledLabel.className = "item-enabled";
     const enabled = document.createElement("input");
     enabled.type = "checkbox";
     enabled.checked = item.enabled !== false;
@@ -450,6 +453,7 @@ function renderItemList() {
       item.enabled = enabled.checked;
       persistItems();
     });
+    enabledLabel.append(enabled, document.createTextNode(" 有効"));
 
     const text = document.createElement("span");
     const priorityLabel = { high: "高", normal: "中", low: "低" }[item.priority ?? "normal"] ?? "中";
@@ -465,7 +469,7 @@ function renderItemList() {
       renderItemList();
     });
 
-    li.append(enabled, text, remove);
+    li.append(enabledLabel, text, remove);
     ui.itemList.appendChild(li);
   }
 }
@@ -525,10 +529,10 @@ function updateConditionFields() {
 }
 
 ui.itemCondition.addEventListener("change", updateConditionFields);
-// 登録の条件は起動時に並べられるので、パネルを開いた時点でも出し分けをやり直す
+// 登録の条件は起動時に並べられるので、ダイアログを開いた時点でも出し分けをやり直す
 {
-  const host = ui.itemCondition.closest("details");
-  if (host) host.addEventListener("toggle", updateConditionFields);
+  const openButton = document.getElementById("open-check");
+  if (openButton) openButton.addEventListener("click", () => setTimeout(updateConditionFields, 0));
 }
 
 // ---- 棋譜の読み込み（ファイル・クリップボード・貼り付け） ----

@@ -246,6 +246,15 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 13px;
 }
 
+/* 有効／無効の切り替え（何の切り替えか分かるように文字を添える） */
+.item-enabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .high { font-weight: 700; color: #a01010; }
 
 .settings { max-width: 640px; font-size: 14px; }
