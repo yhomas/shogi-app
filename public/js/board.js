@@ -100,7 +100,10 @@ export function renderBoard(rootEl, position, options = {}) {
       const piece = position.board[index];
       if (piece) {
         const el = document.createElement("div");
-        el.className = `piece${piece.owner === mySide ? "" : " opposite"}${piece.promoted ? " promoted" : ""}`;
+        // 盤の中の向きは「先手から見た向き」で決める（先手の駒は正立、後手の駒は180度）。
+        // 後手のときは盤ごと180度反転するので（#board.flipped）、
+        // 自分の駒は 180+180=360 で正立し、相手の駒は180度で向こう向きになる
+        el.className = `piece${piece.owner === "w" ? "" : " opposite"}${piece.promoted ? " promoted" : ""}`;
         el.style.setProperty("--piece-scale", String(PIECE_SCALE[piece.type] ?? 0.85));
         el.textContent = pieceGlyph(piece);
         square.appendChild(el);

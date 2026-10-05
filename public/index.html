@@ -11,8 +11,63 @@
 
   <header class="bar">
     <div class="turn" id="turn">読み込み中…</div>
+<div class="toolbar">
+  <button id="open-strength" type="button">強さ</button>
+  <button id="open-check" type="button">チェック項目</button>
+  <button id="open-kif" type="button">棋譜を読み込む</button>
+  <button id="open-view" type="button">表示</button>
+</div>
   </header>
 
+
+
+  <div class="bar">
+    <button id="new-game" type="button">新対局</button>
+    <button id="undo" type="button">待った</button><button id="redo" type="button">進む</button>
+    <button id="resign" type="button" hidden>投了</button>
+    <label class="attack-toggle"><input id="show-opp" type="checkbox" checked> 相手の利き</label>
+    <label class="attack-toggle"><input id="show-mine" type="checkbox" checked> 自分の利き</label>
+  </div>
+  <!-- 利きの表示は、持ち駒の近くのチェックボックスで切り替える。
+       設定の保存・読み込みはこの select を通しているので、画面には出さずに残す。 -->
+  <select id="attack-mode" hidden>
+    <option value="both" selected>自分と相手</option>
+    <option value="mine">自分だけ</option>
+    <option value="opp">相手だけ</option>
+    <option value="none">表示しない</option>
+  </select>
+
+
+  <div class="hand-row">
+    <section class="hand" id="hand-opp"></section>
+  </div>
+  <section class="panel" id="check-panel" hidden>
+    <h2>指す前に確認</h2>
+    <p class="hint" id="check-move"></p>
+    <ul class="check-list" id="check-list"></ul>
+    <div class="bar">
+      <button id="check-play" type="button" disabled>指す</button>
+      <button id="check-cancel" type="button">この手をやめる</button>
+    </div>
+  </section>
+
+  <div id="board"></div>
+  <div class="hand-row">
+    <section class="hand" id="hand-mine"></section>
+  </div>
+
+  <div class="message" id="message"></div>
+
+  <section class="panel" id="analysis-panel" hidden>
+    <h2>検討</h2>
+    <p class="hint" id="analysis-summary"></p>
+    <ol class="pv-list" id="pv-list"></ol>
+  </section>
+
+
+
+  <dialog id="dlg-strength">
+  <div class="dialog-head"><h2>強さの設定</h2><button type="button" class="dialog-close" data-close="dlg-strength">閉じる</button></div>
   <details class="settings" open>
     <summary>強さの設定</summary>
     <div class="bar">
@@ -41,11 +96,6 @@
       <p class="hint">CPUの数を増やすと1手あたりが速くなり、記憶を増やすと読みが深くなります（重くもなります）。</p>
     </details>
     <div class="bar">
-      <label for="play-mode">表示モード</label>
-      <select id="play-mode">
-        <option value="practice" selected>練習（評価値を見せない）</option>
-        <option value="study">検討（評価値と候補手を見せる）</option>
-      </select>
       <button id="settings-save" type="button">設定を保存</button>
     </div>
     <p class="hint" id="settings-status"></p>
@@ -55,74 +105,9 @@
       相手の強さを合わせたいときは「決まった強さにする（Elo）」を使ってください。
     </p>
   </details>
-
-  <section class="panel" id="analysis-panel" hidden>
-    <h2>検討</h2>
-    <p class="hint" id="analysis-summary"></p>
-    <ol class="pv-list" id="pv-list"></ol>
-    <p class="hint">
-      評価値は「＋」が先手有利、「−」が後手有利。1.00 で歩1枚ぶんの差が目安です。
-      読み筋は「移動元→移動先」で示し、成る手は「成」、打つ手は「５五に歩を打つ」のように出ます。
-    </p>
-  </section>
-
-  <div class="bar">
-    <button id="new-game" type="button">新対局</button>
-    <button id="undo" type="button">待った</button><button id="redo" type="button">進む</button>
-  </div>
-  <!-- 利きの表示は、持ち駒の近くのチェックボックスで切り替える。
-       設定の保存・読み込みはこの select を通しているので、画面には出さずに残す。 -->
-  <select id="attack-mode" hidden>
-    <option value="both" selected>自分と相手</option>
-    <option value="mine">自分だけ</option>
-    <option value="opp">相手だけ</option>
-    <option value="none">表示しない</option>
-  </select>
-
-  <div class="bar kif">
-    <label for="kif-file">棋譜（kif）を読む</label>
-    <input id="kif-file" type="file" accept=".kif,.txt,text/plain">
-    <button id="kif-clipboard" type="button">クリップボードから読み込む</button>
-    <label for="kif-upto">開始手数 <output id="kif-upto-label">0</output></label>
-    <input id="kif-upto" type="range" min="0" max="0" value="0" step="1">
-    <label for="my-side">自分が指す側</label>
-    <select id="my-side">
-      <option value="w" selected>先手</option>
-      <option value="b">後手</option>
-    </select>
-    <button id="kif-apply" type="button">この局面から対局</button>
-  </div>
-  <div class="hint" id="kif-status"></div>
-  <details class="paste" id="kif-paste-wrap" hidden>
-    <summary>うまく読み込めないときは、ここに貼り付けてください</summary>
-    <div class="bar">
-      <textarea id="kif-paste" rows="6" placeholder="棋譜のテキストを貼り付けてください"></textarea>
-      <button id="kif-paste-load" type="button">貼り付けた内容を読み込む</button>
-    </div>
-  </details>
-
-  <div class="hand-row">
-    <section class="hand" id="hand-opp"></section>
-    <label class="attack-toggle"><input id="show-opp" type="checkbox" checked> 相手の利き</label>
-  </div>
-  <div id="board"></div>
-  <div class="hand-row">
-    <section class="hand" id="hand-mine"></section>
-    <label class="attack-toggle"><input id="show-mine" type="checkbox" checked> 自分の利き</label>
-  </div>
-
-  <div class="message" id="message"></div>
-
-  <section class="panel" id="check-panel" hidden>
-    <h2>指す前に確認</h2>
-    <p class="hint" id="check-move"></p>
-    <ul class="check-list" id="check-list"></ul>
-    <div class="bar">
-      <button id="check-play" type="button" disabled>指す</button>
-      <button id="check-cancel" type="button">この手をやめる</button>
-    </div>
-  </section>
-
+</dialog>
+<dialog id="dlg-check">
+  <div class="dialog-head"><h2>チェック項目の登録</h2><button type="button" class="dialog-close" data-close="dlg-check">閉じる</button></div>
   <details class="settings">
     <summary>チェック項目の登録</summary>
     <p class="hint">自分の手を指す前に確認したいことを登録します。下の条件に当てはまる局面で指そうとすると、「指す前に確認」が出て、全部に印を付けるまで指せません。</p>
@@ -173,8 +158,58 @@
     <p class="hint" id="item-status"></p>
     <ul class="item-list" id="item-list"></ul>
   </details>
-
-  <footer class="footer">
+</dialog>
+<dialog id="dlg-result">
+  <div class="dialog-head"><h2>対局の結果</h2><button type="button" class="dialog-close" data-close="dlg-result">閉じる</button></div>
+  <div class="settings">
+    <p id="result-text" style="font-size:1.05rem"></p>
+    <p><button id="result-newgame" type="button">もう一度対局する</button></p>
+  </div>
+</dialog>
+<dialog id="dlg-newgame">
+  <div class="dialog-head"><h2>新しい対局</h2><button type="button" class="dialog-close" data-close="dlg-newgame">閉じる</button></div>
+  <div class="settings">
+    <p class="hint">あなたが指す側を選んでください。</p>
+    <label><input type="radio" name="newgame-side" value="w" checked> 先手（あなたが先に指す）</label>
+    <label><input type="radio" name="newgame-side" value="b"> 後手（AIが先に指す）</label>
+    <p><button id="newgame-start" type="button">対局を開始</button></p>
+  </div>
+</dialog>
+<dialog id="dlg-view">
+  <div class="dialog-head"><h2>表示</h2><button type="button" class="dialog-close" data-close="dlg-view">閉じる</button></div>
+  <div class="bar">
+    <label for="play-mode">表示モード</label>
+    <select id="play-mode">
+    <option value="practice" selected>練習（評価値を見せない）</option>
+    <option value="study">検討（評価値と候補手を見せる）</option>
+    </select>
+  </div>
+</dialog>
+<dialog id="dlg-kif">
+  <div class="dialog-head"><h2>棋譜を読み込む</h2><button type="button" class="dialog-close" data-close="dlg-kif">閉じる</button></div>
+  <div class="bar kif">
+    <label for="kif-file">棋譜（kif）を読む</label>
+    <input id="kif-file" type="file" accept=".kif,.txt,text/plain">
+    <button id="kif-clipboard" type="button">クリップボードから読み込む</button>
+    <label for="kif-upto">開始手数 <output id="kif-upto-label">0</output></label>
+    <input id="kif-upto" type="range" min="0" max="0" value="0" step="1">
+    <label for="my-side">自分が指す側</label>
+    <select id="my-side">
+      <option value="w" selected>先手</option>
+      <option value="b">後手</option>
+    </select>
+    <button id="kif-apply" type="button">この局面から対局</button>
+  </div>
+  <div class="hint" id="kif-status"></div>
+  <details class="paste" id="kif-paste-wrap" hidden>
+    <summary>うまく読み込めないときは、ここに貼り付けてください</summary>
+    <div class="bar">
+      <textarea id="kif-paste" rows="6" placeholder="棋譜のテキストを貼り付けてください"></textarea>
+      <button id="kif-paste-load" type="button">貼り付けた内容を読み込む</button>
+    </div>
+  </details>
+</dialog>
+<footer class="footer">
     このアプリ: <a href="https://github.com/yhomas/shogi-app">ソース</a>（GPL-3.0）。
     エンジン: <a href="./engine/COPYING.txt">Fairy-Stockfish</a>（GPL-3.0）の WebAssembly 版を
     <code>engine/</code> に無改変で同梱して読み込んでいます。

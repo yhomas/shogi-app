@@ -201,6 +201,9 @@ function renderHand(host, hand, clickable) {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "hand-piece";
+    // 盤上の駒と同じ大きさになるよう、種類ごとの比率を持たせる
+    const HAND_SCALE = { K: 1.0, R: 0.92, B: 0.92, G: 0.85, S: 0.85, N: 0.78, L: 0.78, P: 0.72 };
+    el.style.setProperty("--piece-scale", String(HAND_SCALE[type] ?? 0.85));
     if (clickable && phase === "human" && position.turn === mySide) {
       el.classList.add("clickable");
       if (selectedHand === type) el.classList.add("selected");
@@ -685,7 +688,9 @@ function afterMove() {
 
 function finishWithMate() {
   phase = "over";
-  setMessage(position.turn === mySide ? "詰みました。あなたの負けです。" : "詰みました。あなたの勝ちです。");
+  const text = position.turn === mySide ? "詰みました。あなたの負けです。" : "詰みました。あなたの勝ちです。";
+  setMessage(text);
+  showResult(text); // 盤の下の文字だけでなく、ダイアログでも知らせる
   render();
 }
 
@@ -1241,3 +1246,123 @@ window.__app = {
   addItem,
   renderItemList,
 };
+
+
+// ---- 設定はボタンを押すとダイアログで開く ----
+for (const id of ["open-strength", "open-check", "open-kif", "open-view"]) {
+  const button = document.getElementById(id);
+  const dialog = document.getElementById(id.replace("open-", "dlg-"));
+  if (!button || !dialog) continue;
+  button.addEventListener("click", () => dialog.showModal());
+  // ダイアログの外側（背景）をクリックしても閉じる。Esc でも閉じる
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}
+document.querySelectorAll("[data-close]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.getElementById(button.dataset.close)?.close();
+  });
+});
+
+
+// ---- 持ち駒の欄を、将棋盤と必ず同じ幅にする ----
+// CSS だけでは盤の実測幅と合わなかったため、実行時に測って合わせる
+{
+  const boardEl = document.getElementById("board");
+  const syncHandWidth = () => {
+    if (!boardEl) return;
+    const width = `${boardEl.getBoundingClientRect().width}px`;
+    for (const hand of document.querySelectorAll("#hand-mine, #hand-opp")) {
+      hand.style.width = width;
+    }
+  };
+  if (boardEl && typeof ResizeObserver !== "undefined") {
+    // 盤の大きさが変わったら（画面幅の変化など）そのたびに合わせ直す
+    new ResizeObserver(syncHandWidth).observe(boardEl);
+  }
+  window.addEventListener("resize", syncHandWidth);
+  syncHandWidth();
+}
+
+
+// ---- 「新対局」は先手／後手を選ぶダイアログを開く ----
+{
+  const oldButton = document.getElementById("new-game");
+  const dialog = document.getElementById("dlg-newgame");
+  const startButton = document.getElementById("newgame-start");
+  if (oldButton && dialog && startButton) {
+    // いまの「押したらすぐ始まる」動きを外すため、ボタンを複製して差し替える
+    // （複製では今までのイベントが引き継がれない）
+    const button = oldButton.cloneNode(true);
+    oldButton.replaceWith(button);
+    button.addEventListener("click", () => dialog.showModal());
+    startButton.addEventListener("click", () => {
+      const chosen = dialog.querySelector('input[name="newgame-side"]:checked');
+      mySide = chosen && chosen.value === "b" ? "b" : "w";
+      dialog.close();
+      newGame();
+    });
+  }
+}
+
+
+// ---- 後手のときは盤を180度反転する（自分の駒を下側にする）----
+function syncBoardFlip() {
+  const boardEl = document.getElementById("board");
+  if (boardEl) boardEl.classList.toggle("flipped", mySide === "b");
+}
+syncBoardFlip();
+{
+  const start = document.getElementById("newgame-start");
+  if (start) start.addEventListener("click", () => setTimeout(syncBoardFlip, 0));
+  const sideSelect = document.getElementById("my-side");
+  if (sideSelect) sideSelect.addEventListener("change", () => setTimeout(syncBoardFlip, 0));
+  const apply = document.getElementById("kif-apply");
+  if (apply) apply.addEventListener("click", () => setTimeout(syncBoardFlip, 0));
+}
+
+
+// ---- 投了ボタンと、終局を知らせるダイアログ ----
+
+/** 対局の結果をダイアログで知らせる。 */
+function showResult(text) {
+  const dialog = document.getElementById("dlg-result");
+  const body = document.getElementById("result-text");
+  if (!dialog || !body) return;
+  body.textContent = text;
+  if (!dialog.open) dialog.showModal();
+}
+
+/** 対局中だけ「投了」を出す。 */
+function syncResignButton() {
+  const button = document.getElementById("resign");
+  if (button) button.hidden = !(phase === "human" || phase === "thinking");
+}
+
+{
+  const resign = document.getElementById("resign");
+  if (resign) {
+    resign.addEventListener("click", () => {
+      if (phase !== "human" && phase !== "thinking") return;
+      phase = "over";
+      clearSelection();
+      const text = "あなたが投了しました。相手の勝ちです。";
+      setMessage(text);
+      showResult(text);
+      syncResignButton();
+      render();
+    });
+  }
+  // 対局を始めたら出す／終わったら隠す
+  for (const id of ["newgame-start", "kif-apply"]) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("click", () => setTimeout(syncResignButton, 0));
+  }
+  const again = document.getElementById("result-newgame");
+  if (again) again.addEventListener("click", () => {
+    document.getElementById("dlg-result")?.close();
+    document.getElementById("new-game")?.click();
+  });
+  syncResignButton();
+}
