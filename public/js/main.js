@@ -30,16 +30,13 @@ const HAND_ORDER = ["R", "B", "G", "S", "N", "L", "P"];
 // チェック項目の条件。仕様 4.4 の表と同じ。
 const CONDITION_TYPES = [
   ["always", "いつも"],
-  ["opponentMoved", "相手が何か動かした"],
   ["opponentMovedPiece", "相手が指定の駒を動かした"],
-  ["opponentMovedFrom", "相手が指定のマスから動かした"],
-  ["opponentMovedTo", "相手が指定のマスへ動かした"],
+  ["opponentCapturedPiece", "相手が指定の駒を取った（直前の手で）"],
+  ["opponentHandHasPiece", "相手が指定の駒を持っている"],
   ["opponentInCheck", "相手に王手をかけている"],
   ["myKingThreatened", "自分の玉が相手の利きに入っている"],
-  ["myPieceAt", "自分の指定の駒が指定のマスにある"],
+  ["myCapturedPiece", "自分が指定の駒を取った（直前の手で）"],
   ["handHasPiece", "自分の指定の駒が持ち駒にある"],
-  ["handCountAtMost", "自分の持ち駒の総数が指定以下"],
-  ["plyAtLeast", "指定の手数以上進んでいる"],
 ];
 
 const ui = {
@@ -348,11 +345,26 @@ function moveInfoFrom(move, beforePosition) {
   };
 }
 
+/**
+ * その手（info）で取った駒。取っていなければ null。
+ * 取った駒はもう盤上に無いので、指す前の局面（beforePosition）から読む。
+ */
+function capturedPiece(info, beforePosition) {
+  if (!info || info.isDrop || !info.to || !beforePosition) return null;
+  return beforePosition.board[squareIndexOf(info.to)] ?? null;
+}
+
 function buildContext() {
+  // 履歴の最後の1件は「直前の手を指す前の局面」を持っている
+  const beforeOpponent = history[history.length - 1];
+  const beforeMine = history[history.length - 2];
   return {
     position,
     lastMove: lastMoveInfo ? lastMoveInfo.raw : null,
     lastMoveInfo,
+    // 直前の手で取った駒（相手の手は最後の履歴、自分の手はその1つ前の履歴から見る）
+    opponentCaptured: capturedPiece(lastMoveInfo, beforeOpponent?.position),
+    myCaptured: capturedPiece(beforeOpponent?.lastMoveInfo, beforeMine?.position),
     ply: plyCount,
     mySide,
   };
@@ -508,16 +520,13 @@ function pieceLabel(spec) {
 // 条件ごとに、使う入力欄と説明。関係ない欄は隠して、何を入れればよいか分かるようにする。
 const CONDITION_FIELDS = {
   always: { fields: [], hint: "いつも出します（指定は不要です）。" },
-  opponentMoved: { fields: [], hint: "相手が何か動かしたときに出します（指定は不要です）。" },
   opponentMovedPiece: { fields: ["piece"], hint: "相手が動かした駒が「駒」に一致するときに出します。" },
-  opponentMovedFrom: { fields: ["squares"], hint: "相手が動かした駒の移動元が「マス」のときに出します。" },
-  opponentMovedTo: { fields: ["squares"], hint: "相手が動かした駒の移動先が「マス」のときに出します。" },
+  opponentCapturedPiece: { fields: ["piece"], hint: "相手が直前の手で取った駒が「駒」に一致するときに出します。" },
+  opponentHandHasPiece: { fields: ["piece"], hint: "相手の持ち駒に「駒」があるときに出します（打ち込まれる前に確かめる用）。" },
   opponentInCheck: { fields: [], hint: "自分が相手に王手をかけているときに出します（指定は不要です）。" },
   myKingThreatened: { fields: [], hint: "自分の玉が相手の利きに入っているときに出します（指定は不要です）。" },
-  myPieceAt: { fields: ["piece", "squares"], hint: "自分の指定の駒が指定のマスにあるときに出します。「駒」と「マス」を指定します。" },
-  handHasPiece: { fields: ["piece"], hint: "自分の指定の駒が持ち駒にあるときに出します。" },
-  handCountAtMost: { fields: ["count"], hint: "自分の持ち駒の合計が「数」以下のときに出します。" },
-  plyAtLeast: { fields: ["ply"], hint: "「手数」以上に進んでいるときに出します。" },
+  myCapturedPiece: { fields: ["piece"], hint: "自分が直前の手で取った駒が「駒」に一致するときに出します。" },
+  handHasPiece: { fields: ["piece"], hint: "自分の持ち駒に「駒」があるときに出します。" },
 };
 
 /** 条件に合わせて入力欄を出し分ける。 */

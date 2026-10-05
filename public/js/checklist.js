@@ -86,19 +86,19 @@ function kingAttacked(position, side) {
   return attacks[attacker][index] > 0;
 }
 
-function handTotal(hand) {
-  return Object.values(hand ?? {}).reduce((sum, count) => sum + (count ?? 0), 0);
-}
-
-function includesSquare(squares, target) {
-  if (!target) return false;
-  return (squares ?? []).includes(target);
+/** その側の持ち駒に、指定の駒があるか。 */
+function handHas(position, side, spec) {
+  const hands = position.hands?.[side] ?? {};
+  return specToTypes(spec).some((type) => (hands[type] ?? 0) > 0);
 }
 
 /**
  * 条件が今の状況に当てはまるか。
- * @param {{type: string, piece?: string, squares?: string[], count?: number, ply?: number}} condition
- * @param {{position: object, lastMove: string|null, lastMoveInfo?: object|null, ply: number, mySide: "w"|"b"}} context
+ *
+ * context.opponentCaptured / myCaptured は「直前の手で取った駒」（無ければ null）。
+ * 盤面からは分からない（取った駒はもう盤上に無い）ので、呼ぶ側が渡す。
+ * @param {{type: string, piece?: string}} condition
+ * @param {{position: object, lastMove: string|null, lastMoveInfo?: object|null, opponentCaptured?: object|null, myCaptured?: object|null, ply: number, mySide: "w"|"b"}} context
  * @returns {boolean}
  */
 export function matchesCondition(condition, context) {
@@ -111,48 +111,29 @@ export function matchesCondition(condition, context) {
     case "always":
       return true;
 
-    case "opponentMoved":
-      return movedPiece(context) !== null;
-
     case "opponentMovedPiece": {
       const moved = movedPiece(context);
       if (!moved || moved.isDrop) return moved ? pieceMatches({ type: moved.type }, condition.piece) : false;
       return pieceMatches({ type: moved.type, promoted: moved.promoted }, condition.piece);
     }
 
-    case "opponentMovedFrom": {
-      const moved = movedPiece(context);
-      return Boolean(moved) && includesSquare(condition.squares, moved.from);
-    }
-
-    case "opponentMovedTo": {
-      const moved = movedPiece(context);
-      return Boolean(moved) && includesSquare(condition.squares, moved.to);
-    }
-
     case "opponentInCheck":
       return kingAttacked(position, opponent);
+
+    case "opponentCapturedPiece":
+      return pieceMatches(context.opponentCaptured, condition.piece);
+
+    case "opponentHandHasPiece":
+      return handHas(position, opponent, condition.piece);
 
     case "myKingThreatened":
       return kingAttacked(position, mySide);
 
-    case "myPieceAt":
-      return (condition.squares ?? []).some((square) => {
-        const piece = position.board[squareIndex(square)];
-        return Boolean(piece) && piece.owner === mySide && pieceMatches(piece, condition.piece);
-      });
+    case "myCapturedPiece":
+      return pieceMatches(context.myCaptured, condition.piece);
 
     case "handHasPiece":
-      return Object.entries(PIECE_NAMES).some(
-        ([name, type]) =>
-          specToTypes(condition.piece).includes(type) && (position.hands[mySide][type] ?? 0) > 0,
-      );
-
-    case "handCountAtMost":
-      return handTotal(position.hands[mySide]) <= (condition.count ?? 0);
-
-    case "plyAtLeast":
-      return (context.ply ?? 0) >= (condition.ply ?? 0);
+      return handHas(position, mySide, condition.piece);
 
     default:
       return false;
