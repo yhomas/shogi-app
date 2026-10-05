@@ -321,9 +321,18 @@ function closeCheckPanel() {
   pendingMove = null;
 }
 
+/** これから指す手を、検討と同じ書き方（▲７八金）で示す。 */
+function describePendingMove(move) {
+  try {
+    return shogiMoveText(move, position, legalMoves);
+  } catch (error) {
+    return move;
+  }
+}
+
 function openCheckPanel(move, items) {
   pendingMove = move;
-  ui.checkMove.textContent = `これから指す手: ${move}`;
+  ui.checkMove.textContent = `これから指す手: ${describePendingMove(move)}`;
   ui.checkList.textContent = "";
 
   for (const item of items) {
@@ -930,7 +939,55 @@ function loadKif(text) {
     );
   }
   setKifStatus(parts.join("／"));
+  // 読み込んだら、その局面をすぐ盤面に出す（対局はまだ始めない）
+  queuePreview();
 }
+
+/**
+ * 読み込んだ棋譜の局面を、いまの開始手数で盤面に出す。対局はまだ始めない。
+ *
+ * 対局前なので phase は "idle" のまま（盤面は触れない）。
+ * 「この局面から対局」を押すと、この局面から対局が始まる。
+ */
+async function previewKif() {
+  if (!parsedKif || phase === "thinking") return;
+  const upto = Number(ui.kifUpto.value);
+  const total = parsedKif.moves.length;
+  mySide = ui.mySide.value === "b" ? "b" : "w";
+
+  try {
+    // 表示だけなので、エンジンを使わず純粋に並べ直す（速く、ぶれない）
+    let replayed = parsedKif.startPosition;
+    for (let i = 0; i < upto; i += 1) replayed = applyMove(replayed, parsedKif.moves[i]);
+    position = replayed;
+    history = [];
+    lastMoveInfo = null;
+    plyCount = upto;
+    clearSelection();
+    closeCheckPanel();
+    phase = "idle"; // 対局前（盤面は触れない）
+    render();
+
+    const parts = [`${upto}手目（全${total}手）の局面を表示しています`];
+    if (parsedKif.errors.length > 0) parts.push(`読めない行が${parsedKif.errors.length}件`);
+    parts.push("「この局面から対局」でこの局面から始めます");
+    setKifStatus(parts.join("／"));
+  } catch (error) {
+    setKifStatus("局面を再現できませんでした。");
+  }
+}
+
+// 開始手数や「自分が指す側」を変えたら、表示中の局面もその場で変える。
+// エンジンへの再現要求が重ならないよう、1つずつ順番に実行する。
+let previewChain = Promise.resolve();
+
+function queuePreview() {
+  previewChain = previewChain.then(() => previewKif()).catch(() => {});
+  return previewChain;
+}
+
+ui.kifUpto.addEventListener("change", queuePreview);
+ui.mySide.addEventListener("change", queuePreview);
 
 /** 2手先までのノード数。局面が本当に読めているかの確認に使う。 */
 async function perftNodes(target, depth = 2) {
