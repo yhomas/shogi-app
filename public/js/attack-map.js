@@ -78,31 +78,25 @@ function movementOf(piece) {
 }
 
 /**
- * ぶつかった味方の駒を越えて、その先も数え続けるか。
+ * その駒が、この向きに進めるとしたら最大何マスか。
  *
- * 条件は2つ:
- *   - 手前の駒が、その向きに2マス以上進める（香・飛・角など）
- *   - ぶつかった味方の駒が、同じ向きに進める（1マスでもよい）
+ *   0        … この向きには進めない（桂、横向きの歩、縦横の向きの角など）
+ *   1        … 1マスだけ進める（歩・金・銀・玉など）
+ *   SLIDE    … 何マスでも進める（香・飛・角、龍の縦横、馬の斜め）
  *
- * たとえば香の前に歩がいる場合、歩も前に進めるので香の利きはその先まで続く。
- * 桂のように、その向きへ進めない駒で止まる。
- *
- * @param {{type: string, owner: string, promoted: boolean}} blocker ぶつかった味方の駒
+ * @param {{type: string, owner: string, promoted: boolean}} piece
  * @param {number} dRank 段の増分（先手から見た向き）
  * @param {number} dColumn 列の増分
- * @param {number} forward 手番の向き（先手 1 / 後手 -1）
- * @param {number} maxSteps 手前の駒の、その向きの最大歩数
- * @returns {boolean}
+ * @param {number} forward その駒の向き（先手 1 / 後手 -1）
+ * @returns {number}
  */
-function passesThrough(blocker, dRank, dColumn, forward, maxSteps) {
-  // 手前の駒が1マスしか進めない向きなら、そもそも越えない
-  if (maxSteps !== SLIDE) return false;
+function stepsInDirection(piece, dRank, dColumn, forward) {
   const stepRank = dRank * forward;
-  const blockerForward = blocker.owner === "w" ? 1 : -1;
-  for (const [mRank, mColumn] of movementOf(blocker)) {
-    if (mRank * blockerForward === stepRank && mColumn === dColumn) return true;
+  const pieceForward = piece.owner === "w" ? 1 : -1;
+  for (const [mRank, mColumn, maxSteps] of movementOf(piece)) {
+    if (mRank * pieceForward === stepRank && mColumn === dColumn) return maxSteps;
   }
-  return false;
+  return 0;
 }
 
 /**
@@ -160,7 +154,9 @@ export function countAttacks(position) {
       const stepRank = dRank * forward;
       let r = rank + stepRank;
       let c = column + dColumn;
-      // 進める残りのマス数。味方を1つ越えると、その次の1マスぶんだけに減る。
+      // この向きに2マス以上進める駒が、この線上にいくつあるか（手前の駒を含む）。
+      // 2つ以上たまると、味方を越えてその先も数え続ける（数の攻めが届く範囲）。
+      let sliders = maxSteps === SLIDE ? 1 : 0;
       let budget = maxSteps;
 
       while (budget > 0 && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
@@ -169,12 +165,14 @@ export function countAttacks(position) {
         const blocker = position.board[target];
         if (blocker) {
           // 駒に当たったら、そのマスは数えたうえで止まる。
-          // 味方の飛び駒の場合は、その次の1マスまで数える（2マス目以降は数えない）。
-          const passesOnward =
-            blocker.owner === piece.owner &&
-            passesThrough(blocker, dRank, dColumn, forward, maxSteps);
-          if (!passesOnward) break;
-          budget = 2;
+          if (blocker.owner !== piece.owner) break;
+          const blockerSteps = stepsInDirection(blocker, dRank, dColumn, forward);
+          // その向きに進めない駒（桂など）で止まる
+          if (blockerSteps === 0) break;
+          if (blockerSteps === SLIDE) sliders += 1;
+          // 2マス以上進める駒が2つ以上なら、その先も数え続ける。
+          // 1つだけなら、ぶつかった駒の次の1マスまで。
+          budget = sliders >= 2 ? Infinity : 2;
         }
         r += stepRank;
         c += dColumn;

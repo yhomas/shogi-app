@@ -25,8 +25,8 @@ test("飛の後ろに飛がいる（同じ筋）: 前の飛を越えて、その
   const position = { board: board({ e1: P("R"), e5: P("R") }), hands: {}, turn: "w" };
   const { w } = countAttacks(position);
   assert.equal(w[spot("e6")], 2, "５四は2（前の飛と、越えた後ろの飛）");
-  assert.equal(w[spot("e7")], 1, "５三は1（前の飛の利きだけ。越えられるのは次の1マスまで）");
-  assert.equal(w[spot("e9")], 1, "５一も1（同上）");
+  assert.equal(w[spot("e7")], 2, "５三も2（飛は2つ重なっているので、その先も数える）");
+  assert.equal(w[spot("e9")], 2, "５一も2（同上）");
   assert.equal(w[spot("e5")], 1, "５五（前の飛のマス）は後ろの飛の1");
 });
 
@@ -46,10 +46,12 @@ test("初期局面の１六は2、２六は2（香と飛が歩を越える）", 
   assert.equal(w[spot("h5")], 0, "２五は0（同上）");
 });
 
-test("香の後ろに香がいる: 同じ向きなら越える", () => {
+test("香の後ろに香がいる: 2つ重なっているので2マス目以降も数える", () => {
   const position = { board: board({ a1: P("L"), a5: P("L") }), hands: {}, turn: "w" };
   const { w } = countAttacks(position);
-  assert.equal(w[spot("a6")], 2, "９四は2（前の香と後ろの香）");
+  assert.equal(w[spot("a6")], 2, "９四は2（前の香と、越えた後ろの香）");
+  assert.equal(w[spot("a7")], 2, "９三も2（香が2つなので、その先も数える）");
+  assert.equal(w[spot("a9")], 2, "９一も2");
 });
 
 test("飛の前に角がいる: 角は縦横に進めないので越えない", () => {
@@ -64,7 +66,7 @@ test("後手でも同じ（向きが逆になるだけ）", () => {
   const position = { board: board({ e9: P("R", "b"), e5: P("R", "b") }), hands: {}, turn: "b" };
   const { b } = countAttacks(position);
   assert.equal(b[spot("e4")], 2, "５六は2（前の飛と、越えた後ろの飛）");
-  assert.equal(b[spot("e1")], 1, "５九は1（前の飛の利きだけ。次の1マスまで）");
+  assert.equal(b[spot("e1")], 2, "５九も2（2つ重なっているので、その先も数える）");
 });
 
 test("相手の駒なら越えない（そこで止まる）", () => {
