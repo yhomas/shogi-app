@@ -25,8 +25,8 @@ test("飛の後ろに飛がいる（同じ筋）: 前の飛を越えて、その
   const position = { board: board({ e1: P("R"), e5: P("R") }), hands: {}, turn: "w" };
   const { w } = countAttacks(position);
   assert.equal(w[spot("e6")], 2, "５四は2（前の飛と、越えた後ろの飛）");
-  assert.equal(w[spot("e7")], 2, "５三も2（飛は2つ重なっているので、その先も数える）");
-  assert.equal(w[spot("e9")], 2, "５一も2（同上）");
+  assert.equal(w[spot("e7")], 1, "５三は1（前の飛の利きだけ。越えられるのは次の1マスまで）");
+  assert.equal(w[spot("e9")], 1, "５一も1（同上）");
   assert.equal(w[spot("e5")], 1, "５五（前の飛のマス）は後ろの飛の1");
 });
 
@@ -46,12 +46,34 @@ test("初期局面の１六は2、２六は2（香と飛が歩を越える）", 
   assert.equal(w[spot("h5")], 0, "２五は0（同上）");
 });
 
-test("香の後ろに香がいる: 2つ重なっているので2マス目以降も数える", () => {
+test("初期局面: ３九の銀のマスの利きは1（４九の金だけ）", () => {
+  const position = createInitialPosition();
+  const { w } = countAttacks(position);
+  // 飛び駒でない駒（玉・金・銀）は、味方を越えて数えない
+  assert.equal(w[spot("g1")], 1, "３九（銀のマス）は1。５九の玉は４九の金で止まる");
+  assert.equal(w[spot("f1")], 1, "４九（金のマス）も1。５九の玉だけ");
+});
+
+test("香の後ろに香がいる: 9四まで数え、その先は前の香の分だけ", () => {
   const position = { board: board({ a1: P("L"), a5: P("L") }), hands: {}, turn: "w" };
   const { w } = countAttacks(position);
   assert.equal(w[spot("a6")], 2, "９四は2（前の香と、越えた後ろの香）");
-  assert.equal(w[spot("a7")], 2, "９三も2（香が2つなので、その先も数える）");
-  assert.equal(w[spot("a9")], 2, "９一も2");
+  assert.equal(w[spot("a7")], 1, "９三は1（前の香の利きだけ。さらに先へ進める駒がいないので延びない）");
+  assert.equal(w[spot("a9")], 1, "９一も1");
+});
+
+test("飛を１八に動かした形: １六までは数え、１五・１四は数えない", () => {
+  // １九の香、１八の飛、１七の歩。飛び駒が2つ並んでいるが、その先にあるのは
+  // 1マスしか進めない歩で、その先には進める駒がいない。
+  const position = {
+    board: board({ a1: P("L"), a2: P("R"), a3: P("P") }),
+    hands: {},
+    turn: "w",
+  };
+  const { w } = countAttacks(position);
+  assert.equal(w[spot("a4")], 3, "１六は3（香・飛・歩）");
+  assert.equal(w[spot("a5")], 0, "１五は0（歩の次の1マスまで。その先は進める駒がいない）");
+  assert.equal(w[spot("a6")], 0, "１四も0");
 });
 
 test("飛の前に角がいる: 角は縦横に進めないので越えない", () => {
@@ -66,7 +88,7 @@ test("後手でも同じ（向きが逆になるだけ）", () => {
   const position = { board: board({ e9: P("R", "b"), e5: P("R", "b") }), hands: {}, turn: "b" };
   const { b } = countAttacks(position);
   assert.equal(b[spot("e4")], 2, "５六は2（前の飛と、越えた後ろの飛）");
-  assert.equal(b[spot("e1")], 2, "５九も2（2つ重なっているので、その先も数える）");
+  assert.equal(b[spot("e1")], 1, "５九は1（前の飛の利きだけ。次の1マスまで）");
 });
 
 test("相手の駒なら越えない（そこで止まる）", () => {

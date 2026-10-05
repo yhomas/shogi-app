@@ -17,6 +17,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        # ローカル確認では、常に最新のファイルを読ませる（古い JS が使われるのを防ぐ）
+        self.send_header("Cache-Control", "no-store, must-revalidate")
         super().end_headers()
 
     def log_message(self, format, *args):

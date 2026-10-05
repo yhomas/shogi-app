@@ -152,32 +152,45 @@ export function countAttacks(position) {
 
     for (const [dRank, dColumn, maxSteps] of movementOf(piece)) {
       const stepRank = dRank * forward;
+      const isSlider = maxSteps === SLIDE;
+      const maxLength = isSlider ? 9 : maxSteps;
+
+      // その線上を手前からたどる。
+      // 「味方で、同じ向きに進める駒」は越えられ、それ以外の駒に当たった所で止まる。
+      const line = [];
+      let lastMover = -1;
+      let stopAt = -1;
       let r = rank + stepRank;
       let c = column + dColumn;
-      // この向きに2マス以上進める駒が、この線上にいくつあるか（手前の駒を含む）。
-      // 2つ以上たまると、味方を越えてその先も数え続ける（数の攻めが届く範囲）。
-      let sliders = maxSteps === SLIDE ? 1 : 0;
-      let budget = maxSteps;
 
-      while (budget > 0 && r >= 1 && r <= 9 && c >= 1 && c <= 9) {
+      for (let i = 0; i < maxLength && r >= 1 && r <= 9 && c >= 1 && c <= 9; i += 1) {
         const target = boardIndex(c, r);
-        squares[target] += 1;
-        const blocker = position.board[target];
-        if (blocker) {
-          // 駒に当たったら、そのマスは数えたうえで止まる。
-          if (blocker.owner !== piece.owner) break;
-          const blockerSteps = stepsInDirection(blocker, dRank, dColumn, forward);
-          // その向きに進めない駒（桂など）で止まる
-          if (blockerSteps === 0) break;
-          if (blockerSteps === SLIDE) sliders += 1;
-          // 2マス以上進める駒が2つ以上なら、その先も数え続ける。
-          // 1つだけなら、ぶつかった駒の次の1マスまで。
-          budget = sliders >= 2 ? Infinity : 2;
+        line.push(target);
+        const other = position.board[target];
+        if (other) {
+          const sameDirection =
+            isSlider &&
+            other.owner === piece.owner &&
+            stepsInDirection(other, dRank, dColumn, forward) > 0;
+          if (sameDirection) {
+            lastMover = i;
+          } else {
+            stopAt = i;
+            break;
+          }
         }
         r += stepRank;
         c += dColumn;
-        budget -= 1;
       }
+
+      // 数える範囲: 越えられる最後の味方がいれば、その次の1マスまで。
+      // いなければ、止まる駒のマスまで（駒が無ければ端まで）。
+      let limit;
+      const endOfLine = stopAt >= 0 ? stopAt : line.length - 1;
+      if (lastMover >= 0) limit = Math.min(lastMover + 1, endOfLine);
+      else limit = endOfLine;
+
+      for (let k = 0; k <= limit; k += 1) squares[line[k]] += 1;
     }
   }
 

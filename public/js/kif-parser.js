@@ -14,6 +14,7 @@ import { createInitialPosition, HAND_PIECE_TYPES } from "./state.js";
 import { squareToEngine, engineToSquare } from "./coords.js";
 import { applyMove } from "./moves.js";
 import { canMoveTo } from "./attack-map.js";
+import { parseKifPosition } from "./kif-position.js";
 
 const RANK_KANJI = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
@@ -233,7 +234,9 @@ function looksLikeBoardDiagram(trimmed) {
  * }}
  */
 export function parseKif(text) {
-  const startPosition = createInitialPosition();
+  // 「途中図だけの棋譜」（指し手が無く局面図から始まる）に対応する。
+  // 局面図があればそこから盤面を作り、無ければ平手の初期局面から始める。
+  const startPosition = parseKifPosition(text) ?? createInitialPosition();
   const moves = [];
   const errors = [];
   let result = null;
