@@ -31,12 +31,17 @@ test("読み筋を並べる（既定は8手まで）", () => {
 });
 
 test("評価値を言葉にする", () => {
-  assert.equal(describeScore(0.1), "ほぼ互角");
-  assert.equal(describeScore(-0.2), "ほぼ互角");
-  assert.equal(describeScore(1.0), "先手が少し有利");
-  assert.equal(describeScore(-2.0), "後手が有利");
-  assert.equal(describeScore(5.0), "先手が大きく有利");
-  assert.equal(describeScore(-12), "後手が勝勢");
+  // 区切りは将棋ウォーズ風（互角 ±200 / 有利 500 / 優勢 1000 / 勝勢 1000以上）
+  assert.equal(describeScore(0), "ほぼ互角");
+  assert.equal(describeScore(199), "ほぼ互角");
+  assert.equal(describeScore(-199), "ほぼ互角");
+  assert.equal(describeScore(200), "先手が有利");
+  assert.equal(describeScore(499), "先手が有利");
+  assert.equal(describeScore(-400), "後手が有利");
+  assert.equal(describeScore(500), "先手が優勢");
+  assert.equal(describeScore(999), "先手が優勢");
+  assert.equal(describeScore(1000), "先手が勝勢");
+  assert.equal(describeScore(-3000), "後手が勝勢");
 });
 
 test("数値でなければ空文字", () => {

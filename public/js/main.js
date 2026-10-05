@@ -50,6 +50,7 @@ const ui = {
   handOpp: document.getElementById("hand-opp"),
   newGame: document.getElementById("new-game"),
   undo: document.getElementById("undo"),
+  redo: document.getElementById("redo"),
   mode: document.getElementById("attack-mode"),
   showMine: document.getElementById("show-mine"),
   showOpp: document.getElementById("show-opp"),
@@ -108,6 +109,7 @@ let engine = null;
 let parsedKif = null;
 let checkItems = [];
 let confirmedMoves = new Set();
+let redoStack = [];
 let lastMoveInfo = null;
 let plyCount = 0;
 let pendingMove = null;
@@ -181,6 +183,7 @@ function renderHeader() {
     : "準備中";
   ui.turn.textContent = `${sideName(position.turn)} ${turn}／${state}`;
   ui.undo.disabled = history.length === 0 || phase === "thinking" || phase === "idle";
+  ui.redo.disabled = redoStack.length === 0 || phase === "thinking";
 }
 
 function renderHands() {
@@ -232,9 +235,14 @@ function onSquareClick(column, rank) {
     return;
   }
 
-  // 自分の駒をタップした → 選ぶ
+  // 自分の駒をタップした → 選ぶ。同じ駒をもう一度タップしたら選択を解除する
   const piece = position.board[boardIndex(column, rank)];
   if (piece && piece.owner === mySide) {
+    if (selectedSquare === square) {
+      clearSelection();
+      render();
+      return;
+    }
     const dests = destinationsFrom(legalMoves, square);
     if (dests.length === 0) {
       clearSelection();
@@ -642,6 +650,7 @@ async function commitMove(move) {
   // 同じ局面で同じ手を二度確認しないように記録する
   confirmedMoves.add(`${boardToSfen(position)}|${move}`);
   const info = moveInfoFrom(move, position);
+  redoStack = []; // 新しく指したら、進める先は消える
   history.push({ position, legalMoves, lastMoveInfo, plyCount });
   lastMoveInfo = info;
   position = applyMove(position, move);
@@ -696,6 +705,7 @@ async function runEngineTurn() {
     }
     const before = position;
     const info = moveInfoFrom(bestmove, before);
+    redoStack = []; // 新しく指したら、進める先は消える
     history.push({ position: before, legalMoves, lastMoveInfo, plyCount });
     lastMoveInfo = info;
     position = applyMove(before, bestmove);
@@ -712,29 +722,56 @@ async function runEngineTurn() {
   }
 }
 
+ui.redo.addEventListener("click", redo);
+
 function undo() {
-  // AIの手と自分の手を1手ずつ戻して、自分の手番に戻す
-  while (history.length > 0) {
-    const snapshot = history.pop();
-    position = snapshot.position;
-    legalMoves = snapshot.legalMoves;
-    lastMoveInfo = snapshot.lastMoveInfo ?? null;
-    plyCount = snapshot.plyCount ?? 0;
-    if (position.turn === mySide) break;
-  }
+  if (history.length === 0) return;
+  // いま見ている局面を控えておく（「進む」で戻ってくる先）
+  redoStack.unshift({ position, legalMoves, lastMoveInfo, plyCount });
+  // 1回で1手だけ戻す（進むと対になる）
+  const snapshot = history.pop();
+  position = snapshot.position;
+  legalMoves = snapshot.legalMoves;
+  lastMoveInfo = snapshot.lastMoveInfo ?? null;
+  plyCount = snapshot.plyCount ?? 0;
   // 確認パネルを開いたまま戻すと、古い手を今の局面に対して指してしまう
   closeCheckPanel();
   clearSelection();
   setMessage("");
-  phase = position.turn === mySide ? "human" : "thinking";
+  // 戻した局面では、AIに指させない（履歴をなぞるだけ）
+  phase = "human";
   render();
-  if (position.turn !== mySide) runEngineTurn();
+  // 検討の評価値・候補手も、戻した局面に合わせて読み直す
+  maybeAnalyze();
+}
+
+/**
+ * 「進む」。待ったで戻した分を、押すたびに1手ずつ進める。
+ */
+function redo() {
+  if (redoStack.length === 0) return;
+  const snapshot = redoStack.shift();
+  history.push(snapshot);
+  position = snapshot.position;
+  legalMoves = snapshot.legalMoves;
+  lastMoveInfo = snapshot.lastMoveInfo ?? null;
+  plyCount = snapshot.plyCount ?? 0;
+  closeCheckPanel();
+  clearSelection();
+  setMessage("");
+  // 進める先が残っている間は、AIに指させない（過去の手をなぞるだけ）
+  const atLiveEnd = redoStack.length === 0;
+  phase = atLiveEnd && position.turn !== mySide ? "thinking" : "human";
+  render();
+  maybeAnalyze();
+  if (atLiveEnd && position.turn !== mySide) runEngineTurn();
 }
 
 async function newGame() {
   position = createInitialPosition();
   history = [];
   confirmedMoves = new Set();
+  redoStack = [];
   plyCount = 0;
   lastMoveInfo = null;
   clearSelection();
@@ -815,9 +852,10 @@ async function searchBestMove() {
   return engine.goDepth(settings.depth);
 }
 
+/** 評価値を「点」で出す（1歩 = 100点。将棋ウォーズやぴよ将棋と同じ単位）。 */
 function formatScore(cp, sign) {
-  const value = (cp * sign) / 100;
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+  const value = Math.round((cp * sign) / 10) * 10; // 10点単位に丸める
+  return `${value > 0 ? "+" : ""}${value}`;
 }
 
 function renderAnalysis(found, maxDepth) {
@@ -843,7 +881,7 @@ function renderAnalysis(found, maxDepth) {
       score = "—";
     } else {
       score = formatScore(entry.cp, sign);
-      const word = describeScore((entry.cp * sign) / 100);
+      const word = describeScore(entry.cp * sign);
       if (word) score = `${score}（${word}）`;
     }
     // 候補手もその続きも、棋譜の書き方（▲７八金）で出す

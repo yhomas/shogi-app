@@ -84,10 +84,7 @@ body {
   font-weight: 700;
   /* 五角形の上の窄みに文字がかからないよう、少し下げる */
   padding-top: 6%;
-  /* 駒の形（五角形）。参考画像に合わせ、肩は上から15%・幅の14%の位置 */
-  clip-path: polygon(50% 0%, 86% 15%, 100% 100%, 0% 100%, 14% 15%);
   /* 木の駒らしい色。盤面（#f0e0c0）より濃くして、駒が浮き出るようにする */
-  background: linear-gradient(#f0d79f 0%, #dfbe7c 45%, #cfa961 80%, #bd9147 100%);
 }
 
 /* 成駒は赤い文字（実物と同じ） */
@@ -275,4 +272,38 @@ button:disabled { opacity: 0.45; cursor: default; }
   button { min-height: 44px; }
 
   .hand-piece { min-width: 48px; }
+}
+
+
+
+/* ---- 盤面と駒の色味と影（参考画像に合わせる） ---- */
+
+/* 盤の木目。実測 rgb(252,192,115) 付近 */
+#board {
+  background:
+    repeating-linear-gradient(90deg, rgba(120, 80, 30, 0.05) 0 2px, rgba(255, 255, 255, 0) 2px 13px),
+    linear-gradient(180deg, #fdc476 0%, #f9bd6e 35%, #f6b868 65%, #f2b262 100%);
+}
+.sq {
+  border-color: rgba(90, 60, 25, 0.75);
+}
+
+/* 駒の本体（五角形）。切り抜きはこの層だけに掛けるので、影が切り取られない。
+   z-index: -1 で文字の後ろに置く */
+.piece::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(155deg, #fdf3d8 0%, #f7e6bd 30%, #eed7a2 62%, #ddbd7f 100%);
+  clip-path: polygon(50% 0%, 86% 15%, 100% 100%, 0% 100%, 14% 15%);
+}
+
+/* 盤に落ちる駒の影。左上から光が当たり、右下へ落ちる。
+   駒だけに掛かり、マスの罫線や利きの数字には掛からない。
+   近い影は濃すぎないよう駒の色（木）に近い茶色にし、遠い影は薄く小さくする */
+.piece {
+  filter: drop-shadow(2px 2px 0 rgba(130, 95, 50, 0.8))
+    drop-shadow(5px 6px 4px rgba(120, 85, 45, 0.5))
+    drop-shadow(9px 12px 8px rgba(110, 80, 40, 0.35));
 }

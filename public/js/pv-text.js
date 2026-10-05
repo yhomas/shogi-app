@@ -58,19 +58,19 @@ export function formatPv(moves, limit = 8) {
 }
 
 /**
- * 先手から見た評価値（歩 = 1.0）を、言葉の目安にする。
- * @param {number} value
+ * 先手から見た評価値（点。1歩 = 100点）を、言葉の目安にする。
+ * 区切りは将棋ウォーズに合わせている。
+ * @param {number} points
  * @returns {string} 数値でなければ空文字
  */
-export function describeScore(value) {
-  if (value === null || value === undefined || value === "") return "";
-  const v = Number(value);
+export function describeScore(points) {
+  if (points === null || points === undefined || points === "") return "";
+  const v = Number(points);
   if (!Number.isFinite(v)) return "";
   const size = Math.abs(v);
   const lead = v > 0 ? "先手" : "後手";
-  if (size < 0.5) return "ほぼ互角";
-  if (size < 1.5) return `${lead}が少し有利`;
-  if (size < 4) return `${lead}が有利`;
-  if (size < 8) return `${lead}が大きく有利`;
+  if (size < 200) return "ほぼ互角";
+  if (size < 500) return `${lead}が有利`;
+  if (size < 1000) return `${lead}が優勢`;
   return `${lead}が勝勢`;
 }
