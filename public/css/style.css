@@ -52,20 +52,49 @@ body {
   border: 1px solid var(--square-line);
 }
 
+/* 駒の文字に使う行書体（Yuji Mai の、駒で使う文字だけのサブセット）。
+   ライセンスは同梱の OFL-YujiMai.txt（SIL Open Font License）。 */
+@font-face {
+  font-family: "Yuji Mai Pieces";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/yuji-mai-pieces.woff2") format("woff2");
+}
+
 .piece {
+  /* 駒の種類ごとの大きさ（王将を1.0とした比率）。board.js が設定する */
+  --piece-scale: 0.85;
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--sq) * var(--piece-scale) * 0.92);
+  height: calc(var(--sq) * var(--piece-scale) * 0.92);
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--sq) * 0.52);
+  /* 駒の文字は行書体（Yuji Mai）。無い場合は明朝系に落とす。 */
+  font-family: "Yuji Mai Pieces", "Hiragino Mincho ProN", "Hiragino Mincho Pro",
+    "Yu Mincho", "YuMincho", "MS PMincho", "Noto Serif JP", serif;
+  font-size: calc(var(--sq) * var(--piece-scale) * 0.52);
   line-height: 1;
-  color: #1a1a1a;
-  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+  color: #241704;
+  /* 行書体は太字を持たないので、ブラウザが太く描く（合成太字） */
+  font-weight: 700;
+  /* 五角形の上の窄みに文字がかからないよう、少し下げる */
+  padding-top: 6%;
+  /* 駒の形（五角形）。参考画像に合わせ、肩は上から15%・幅の14%の位置 */
+  clip-path: polygon(50% 0%, 86% 15%, 100% 100%, 0% 100%, 14% 15%);
+  /* 木の駒らしい色。盤面（#f0e0c0）より濃くして、駒が浮き出るようにする */
+  background: linear-gradient(#f0d79f 0%, #dfbe7c 45%, #cfa961 80%, #bd9147 100%);
 }
 
-/* 相手の駒は180度回転する */
-.piece.opposite { transform: rotate(180deg); }
+/* 成駒は赤い文字（実物と同じ） */
+.piece.promoted { color: #b81717; }
+
+/* 相手の駒は180度回転する（形も文字も相手向きになる） */
+.piece.opposite { transform: translate(-50%, -50%) rotate(180deg); }
 
 /* 利き数。相手は左上に赤、自分は右下に青 */
 .cnt {

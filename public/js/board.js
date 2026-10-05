@@ -14,6 +14,9 @@ import { boardIndex } from "./state.js";
 const PIECE_GLYPH = { P: "歩", L: "香", N: "桂", S: "銀", G: "金", B: "角", R: "飛", K: "玉" };
 const PROMOTED_GLYPH = { P: "と", L: "杏", N: "圭", S: "全", B: "馬", R: "龍" };
 
+// 駒の大きさの比率（王将を 1.0 とした）。実物の駒の大きさに合わせている。
+const PIECE_SCALE = { K: 1.0, R: 0.92, B: 0.92, G: 0.85, S: 0.85, N: 0.78, L: 0.78, P: 0.72 };
+
 const OPACITY_BY_COUNT = { 0: 0, 1: 0.15, 2: 0.3, 3: 0.45, 4: 0.6 };
 const OPACITY_MAX = 0.75;
 
@@ -97,7 +100,8 @@ export function renderBoard(rootEl, position, options = {}) {
       const piece = position.board[index];
       if (piece) {
         const el = document.createElement("div");
-        el.className = `piece${piece.owner === mySide ? "" : " opposite"}`;
+        el.className = `piece${piece.owner === mySide ? "" : " opposite"}${piece.promoted ? " promoted" : ""}`;
+        el.style.setProperty("--piece-scale", String(PIECE_SCALE[piece.type] ?? 0.85));
         el.textContent = pieceGlyph(piece);
         square.appendChild(el);
       }

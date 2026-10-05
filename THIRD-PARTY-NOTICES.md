@@ -8,6 +8,19 @@
 - 対応するソース: https://github.com/yhomas/shogi-app
 - **無保証**: 本ソフトウェアは無保証です。法律が許す限り、いかなる保証も付きません（GPL-3.0 §15〜§17）。
 
+## Yuji Mai（駒の文字に使う行書体）
+
+| 項目 | 内容 |
+|---|---|
+| 名称 | Yuji Mai |
+| 作者 | The Yuji Project Authors（https://github.com/Kinutafontfactory/Yuji） |
+| ライセンス | **SIL Open Font License 1.1**（全文は [`public/fonts/OFL-YujiMai.txt`](./public/fonts/OFL-YujiMai.txt)） |
+| 入手元 | Google Fonts / https://github.com/google/fonts/tree/main/ofl/yujimai |
+| 改変 | **サブセット化**（駒で使う文字＝歩香桂銀金角飛玉と杏圭全馬龍 の14文字だけを残した）。OFL は改変と再配布を認めています |
+| 同梱物 | `public/fonts/yuji-mai-pieces.woff2`（約7KB） |
+
+将棋の駒の文字は、すべてこの書体で表示します。
+
 ## Fairy-Stockfish（WebAssembly 版）
 
 | 項目 | 内容 |
