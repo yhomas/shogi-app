@@ -66,6 +66,7 @@ const ui = {
   checkMove: document.getElementById("check-move"),
   checkClose: document.getElementById("check-close"),
   itemText: document.getElementById("item-text"),
+  itemGroup: document.getElementById("item-group"),
   itemCondition: document.getElementById("item-condition"),
   itemHint: document.getElementById("item-hint"),
   itemPiece: document.getElementById("item-piece"),
@@ -104,6 +105,7 @@ let mySide = "w";
 let engine = null;
 let parsedKif = null;
 let checkItems = [];
+let editingItem = null; // 文章を直している最中の項目（一覧の行を入力欄にする）
 let redoStack = [];
 let lastMoveInfo = null;
 let plyCount = 0;
@@ -389,27 +391,83 @@ function describeLastMove() {
   }
 }
 
+/** チェック1件分の行（確かめた印と文章）。 */
+function checkListItem(item) {
+  const li = document.createElement("li");
+  const label = document.createElement("label");
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  const text = document.createElement("span");
+  text.textContent = item.text;
+  if (item.priority === "high") text.classList.add("high");
+  label.append(box, text);
+  li.appendChild(label);
+  return li;
+}
+
+/** グループの見出し。ここで、そのグループを出す／出さないを切り替える。 */
+function checkGroupItem(name) {
+  const li = document.createElement("li");
+  li.className = "check-group";
+  const label = document.createElement("label");
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = shownGroups.has(name);
+  box.addEventListener("change", () => {
+    setGroupShown(name, box.checked);
+    showTurnChecks(); // その場で出し直す
+  });
+  const text = document.createElement("span");
+  text.textContent = name;
+  label.append(box, text);
+  li.appendChild(label);
+  return li;
+}
+
 /**
  * この手番で確かめることを出す。
  *
  * 以前は「手を選んだ後の確認」だったが、自分の手番が来た時点（指す前）に見せる。
+ * グループに入れた項目は既定では出さない（見出しのチェックで出す）。
+ * グループに入れていない項目は、罫線で囲んで「グループなし」と分かるようにする。
  */
 function openCheckPanel(items) {
   const last = describeLastMove();
   ui.checkMove.textContent = last ? `相手の直前の手: ${last}` : "あなたの手番です。";
   ui.checkList.textContent = "";
 
+  const ungrouped = [];
+  const groups = [];
   for (const item of items) {
-    const li = document.createElement("li");
-    const label = document.createElement("label");
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    const text = document.createElement("span");
-    text.textContent = item.text;
-    if (item.priority === "high") text.classList.add("high");
-    label.append(box, text);
-    li.appendChild(label);
+    const name = itemGroupName(item);
+    if (name === "") {
+      ungrouped.push(item);
+      continue;
+    }
+    let group = groups.find((entry) => entry.name === name);
+    if (!group) {
+      group = { name, items: [] };
+      groups.push(group);
+    }
+    group.items.push(item);
+  }
+
+  // グループに入れていない項目（先頭）。グループがあるときだけ罫線で囲む
+  ungrouped.forEach((item, index) => {
+    const li = checkListItem(item);
+    if (groups.length > 0) {
+      li.classList.add("check-ungrouped");
+      if (index === 0) li.classList.add("first");
+      if (index === ungrouped.length - 1) li.classList.add("last");
+    }
     ui.checkList.appendChild(li);
+  });
+
+  // グループ。既定では中身を出さず、見出しのチェックで出す
+  for (const group of groups) {
+    ui.checkList.appendChild(checkGroupItem(group.name));
+    if (!shownGroups.has(group.name)) continue;
+    for (const item of group.items) ui.checkList.appendChild(checkListItem(item));
   }
 
   ui.checkPanel.hidden = false;
@@ -441,12 +499,174 @@ function cancelAnalysis() {
 
 // ---- チェック項目の登録 ----
 
+/** その項目のグループ名（未設定なら空文字）。 */
+function itemGroupName(item) {
+  return String(item?.group ?? "").trim();
+}
+
+// ---- グループ名の候補（登録済みから選べるようにする） ----
+
+/** 今までに使ったグループ名（重複なし・登録順）。 */
+function knownGroupNames() {
+  return [...new Set(checkItems.map(itemGroupName).filter(Boolean))];
+}
+
+/** 候補。入力した文字を含むものを、先頭が一致する順に並べる（空なら全部）。 */
+function groupChoices(query) {
+  const q = query.trim().toLowerCase();
+  const names = knownGroupNames();
+  if (q === "") return names;
+  const starts = names.filter((name) => name.toLowerCase().startsWith(q));
+  const rest = names.filter((name) => !name.toLowerCase().startsWith(q) && name.toLowerCase().includes(q));
+  return [...starts, ...rest];
+}
+
+// 候補の箱は、ダイアログの中に置く（ダイアログより手前に出るように）
+const groupMenu = document.createElement("div");
+groupMenu.className = "combo-menu";
+groupMenu.hidden = true;
+document.getElementById("dlg-check").appendChild(groupMenu);
+
+let comboInput = null; // 候補を出している入力欄
+let comboChoices = []; // 出している候補
+let comboIndex = -1; // 選んでいる候補
+
+/** 候補を出し直す。出すものがなければ閉じる。 */
+function refreshGroupMenu() {
+  if (!comboInput) return;
+  comboChoices = groupChoices(comboInput.value);
+  groupMenu.textContent = "";
+  if (comboChoices.length === 0) {
+    closeGroupMenu();
+    return;
+  }
+  if (comboIndex >= comboChoices.length || comboIndex < 0) comboIndex = 0;
+  comboChoices.forEach((name, index) => {
+    const row = document.createElement("div");
+    row.className = `combo-item${index === comboIndex ? " active" : ""}`;
+    row.textContent = name;
+    // mousedown で受ける（押した拍子に閉じてしまわないように）
+    row.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      pickGroupChoice(name);
+    });
+    groupMenu.appendChild(row);
+  });
+  const rect = comboInput.getBoundingClientRect();
+  groupMenu.style.left = `${Math.round(rect.left)}px`;
+  groupMenu.style.top = `${Math.round(rect.bottom + 2)}px`;
+  groupMenu.style.minWidth = `${Math.round(rect.width)}px`;
+  groupMenu.hidden = false;
+}
+
+function openGroupMenu(input) {
+  comboInput = input;
+  comboIndex = 0; // 先頭を選んでおく（Enterですぐ選べる）
+  refreshGroupMenu();
+}
+
+function closeGroupMenu() {
+  groupMenu.hidden = true;
+  groupMenu.textContent = "";
+  comboInput = null;
+  comboChoices = [];
+  comboIndex = -1;
+}
+
+/** 候補を選んだとき。入力欄にそのグループ名を入れる。 */
+function pickGroupChoice(name) {
+  if (!comboInput) return;
+  const input = comboInput;
+  input.value = name;
+  closeGroupMenu();
+  input.focus();
+}
+
+/**
+ * 入力欄に「登録済みのグループから選ぶ」動きを付ける。
+ * 文字を打つと、その文字を含むグループだけが候補に出る（そのまま打ち込んで新しい名前も作れる）。
+ */
+function attachGroupCombo(input) {
+  input.addEventListener("focus", () => openGroupMenu(input));
+  input.addEventListener("input", () => openGroupMenu(input));
+  input.addEventListener("blur", () => {
+    if (comboInput === input) closeGroupMenu();
+  });
+  input.addEventListener("keydown", (event) => {
+    const mine = !groupMenu.hidden && comboInput === input;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!comboInput) {
+        openGroupMenu(input);
+        event.preventDefault();
+        return;
+      }
+      if (comboChoices.length === 0) return;
+      event.preventDefault();
+      comboIndex = event.key === "ArrowDown"
+        ? (comboIndex + 1) % comboChoices.length
+        : (comboIndex - 1 + comboChoices.length) % comboChoices.length;
+      refreshGroupMenu();
+      return;
+    }
+    if (event.key === "Enter" && mine) {
+      // 候補を選ぶのに使う（登録や保存には回さない）
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      pickGroupChoice(comboChoices[comboIndex]);
+      return;
+    }
+    if (event.key === "Escape" && mine) {
+      // まず候補を閉じる（保存のやめるには回さない）
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeGroupMenu();
+    }
+  });
+}
+
+// 画面が動くと候補の位置がずれるので閉じる
+window.addEventListener("scroll", () => closeGroupMenu(), true);
+window.addEventListener("resize", () => closeGroupMenu());
+
+const SHOWN_GROUPS_KEY = "shogi-app.checklist.shown-groups.v1";
+
+/**
+ * 「出す」にしているグループ名を読む。
+ * 既定は空＝グループに入れたチェックは出さない（見出しのチェックで出す）。
+ */
+function loadShownGroups() {
+  try {
+    const raw = localStorage.getItem(SHOWN_GROUPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((name) => typeof name === "string") : []);
+  } catch (error) {
+    return new Set();
+  }
+}
+
+let shownGroups = loadShownGroups();
+
+/** グループを出す／出さないを切り替えて覚えておく。 */
+function setGroupShown(name, shown) {
+  if (shown) shownGroups.add(name);
+  else shownGroups.delete(name);
+  try {
+    localStorage.setItem(SHOWN_GROUPS_KEY, JSON.stringify([...shownGroups]));
+  } catch (error) {
+    // 保存できなくても続ける
+  }
+}
+
 function setItemStatus(text) {
   ui.itemStatus.textContent = text;
 }
 
 function renderItemList() {
   ui.itemList.textContent = "";
+
+  // 候補を出している最中なら、新しいグループ名をすぐ候補に入れる
+  if (!groupMenu.hidden) refreshGroupMenu();
+
   if (checkItems.length === 0) {
     const li = document.createElement("li");
     li.textContent = "まだ登録されていません。";
@@ -454,7 +674,7 @@ function renderItemList() {
     return;
   }
 
-  for (const item of checkItems) {
+  checkItems.forEach((item, index) => {
     const li = document.createElement("li");
 
     // 有効／無効の切り替え。何の切り替えか分かるように文字を添える
@@ -468,24 +688,124 @@ function renderItemList() {
       persistItems();
     });
     enabledLabel.append(enabled, document.createTextNode(" 有効"));
+    li.appendChild(enabledLabel);
+
+    // 文章を直している最中は、その行を入力欄に差し替える（グループもここで直せる）
+    if (editingItem === item) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "item-text";
+      input.size = 30;
+      input.value = item.text;
+      input.placeholder = "確認する内容";
+
+      const groupInput = document.createElement("input");
+      groupInput.type = "text";
+      groupInput.className = "item-group-input";
+      groupInput.size = 8;
+      groupInput.value = itemGroupName(item);
+      groupInput.placeholder = "グループ";
+      attachGroupCombo(groupInput);
+
+      const save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "保存";
+      save.addEventListener("click", () => saveItemText(item, input.value, groupInput.value));
+
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "やめる";
+      cancel.addEventListener("click", () => {
+        editingItem = null;
+        renderItemList();
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") saveItemText(item, input.value, groupInput.value);
+        if (event.key === "Escape") {
+          editingItem = null;
+          renderItemList();
+        }
+      });
+
+      li.append(input, groupInput, save, cancel);
+      ui.itemList.appendChild(li);
+      return;
+    }
 
     const text = document.createElement("span");
+    text.className = "item-text";
     const priorityLabel = { high: "高", normal: "中", low: "低" }[item.priority ?? "normal"] ?? "中";
-    text.textContent = `${item.text}（${conditionLabel(item.condition)}／優先度 ${priorityLabel}）`;
+    const group = itemGroupName(item);
+    text.textContent = `${group ? `[${group}] ` : ""}${item.text}（${conditionLabel(item.condition)}／優先度 ${priorityLabel}）`;
     if (item.priority === "high") text.classList.add("high");
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "編集";
+    edit.addEventListener("click", () => {
+      editingItem = item;
+      renderItemList();
+      ui.itemList.querySelector("input[type=text]")?.focus();
+    });
+
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = "↑";
+    up.title = "上へ動かす";
+    up.setAttribute("aria-label", "上へ動かす");
+    up.disabled = index === 0;
+    up.addEventListener("click", () => moveItem(index, -1));
+
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = "↓";
+    down.title = "下へ動かす";
+    down.setAttribute("aria-label", "下へ動かす");
+    down.disabled = index === checkItems.length - 1;
+    down.addEventListener("click", () => moveItem(index, 1));
 
     const remove = document.createElement("button");
     remove.type = "button";
     remove.textContent = "削除";
     remove.addEventListener("click", () => {
+      if (editingItem === item) editingItem = null;
       checkItems = checkItems.filter((entry) => entry !== item);
       persistItems();
       renderItemList();
     });
 
-    li.append(enabledLabel, text, remove);
+    li.append(text, edit, up, down, remove);
     ui.itemList.appendChild(li);
+  });
+}
+
+/** 登録した文章とグループを直す。文章は空にできない。 */
+function saveItemText(item, value, groupValue) {
+  const text = String(value ?? "").trim();
+  if (text === "") {
+    setItemStatus("確認する内容を入れてください。");
+    return;
   }
+  item.text = text;
+  const group = String(groupValue ?? "").trim();
+  if (group) item.group = group;
+  else delete item.group;
+  editingItem = null;
+  persistItems();
+  renderItemList();
+  setItemStatus("直しました。");
+}
+
+/** 一覧の並びを1つ動かす。この並び順が、チェックを出すときの順になる。 */
+function moveItem(index, delta) {
+  const to = index + delta;
+  if (to < 0 || to >= checkItems.length) return;
+  const [item] = checkItems.splice(index, 1);
+  checkItems.splice(to, 0, item);
+  persistItems();
+  renderItemList();
+  setItemStatus("並び順を変えました。");
 }
 
 function conditionLabel(condition) {
@@ -501,6 +821,8 @@ function conditionLabel(condition) {
 
 function persistItems() {
   saveItems(checkItems);
+  // 追加・編集・並び替え・有効/無効・削除を、いま出ているチェックにもすぐ反映する
+  showTurnChecks();
 }
 
 const PIECE_LABELS = {
@@ -680,13 +1002,17 @@ function addItem() {
   if (ui.itemCount.value !== "") condition.count = Number(ui.itemCount.value);
   if (ui.itemPly.value !== "") condition.ply = Number(ui.itemPly.value);
 
-  checkItems.push({
+  const item = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     text,
     condition,
     enabled: true,
     priority: ui.itemPriority.value,
-  });
+  };
+  // グループは任意。入っていれば、チェックを出すときにグループ単位でまとめる
+  const group = ui.itemGroup.value.trim();
+  if (group) item.group = group;
+  checkItems.push(item);
   persistItems();
   renderItemList();
 
@@ -695,6 +1021,8 @@ function addItem() {
   ui.itemSquares.value = "";
   ui.itemCount.value = "";
   ui.itemPly.value = "";
+  ui.itemGroup.value = "";
+  closeGroupMenu();
   setItemStatus(`追加しました: ${text}`);
 }
 
@@ -1243,6 +1571,8 @@ ui.checkClose.addEventListener("click", () => {
 });
 
 ui.itemAdd.addEventListener("click", addItem);
+// グループ名は、登録済みの名前から選べるようにする
+attachGroupCombo(ui.itemGroup);
 
 const STUDY_MODE_KEY = "shogi-app.study-mode";
 
