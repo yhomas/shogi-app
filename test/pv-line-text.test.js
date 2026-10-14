@@ -48,9 +48,10 @@ test("先頭の1手だけは、合法手があれば左右上下が付く", () =
   assert.equal(shogiPvText(["f1e2"], position), "▲５八金");
 });
 
-test("適用できない手が混ざっても落ちない（その場合は元の並びを返す）", () => {
+test("適用できない手が混ざっても落ちない（その場合は読める形に直して返す）", () => {
   const position = { board: board({ e5: P() }), turn: "w" };
   const out = shogiPvText(["e5e6", "zzzz"], position);
-  assert.equal(out, "e5e6 zzzz");
+  // 生の記法（e5e6）は出さず、マスの形に直す。読めない文字列はそのまま
+  assert.equal(out, "５五→５四 zzzz");
   assert.equal(typeof shogiPvText(["e5e6"], position), "string");
 });

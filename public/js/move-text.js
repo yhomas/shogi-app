@@ -3,7 +3,7 @@
 // 読み筋の表示に使う。左/右/上/下は「同じ名前の駒が同じマスへ行けるか」で決まるので、
 // その局面の合法手が分かるときだけ付ける（分からないときは付けない）。
 
-import { squareToJapanese } from "./pv-text.js";
+import { squareToJapanese, formatPvMove } from "./pv-text.js";
 import { applyMove } from "./moves.js";
 
 const FILES = "abcdefghi";
@@ -125,7 +125,8 @@ export function shogiPvText(pv, position, legalMoves = null) {
       current = applyMove(current, move);
     });
   } catch (error) {
-    return pv.join(" ");
+    // 局面に合わない読み筋が来たときは、生の記法（d3e2 L@e6）を出さず、読める形に直して出す
+    return pv.map(formatPvMove).join(" ");
   }
   return parts.join(" ");
 }

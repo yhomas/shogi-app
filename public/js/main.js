@@ -1045,6 +1045,8 @@ function needEngine() {
 }
 
 async function refreshLegalMoves() {
+  // 合法手の取得（perft）もエンジンを使う。読みが走ったままだと結果が混ざるので、先に止めて待つ
+  await stopRunningSearch();
   legalMoves = await enumerateLegalMoves(engine, position);
 }
 
@@ -1097,10 +1099,14 @@ async function runEngineTurn() {
   if (!needEngine()) return;
   phase = "thinking";
   render();
+  // 前の局面の候補手は、盤と合わせられないので消す（自分の手番に戻ったら出し直す）
+  clearAnalysis();
   try {
+    // 検討の読みが残っていたら、止めて終わるのを待ってからAIに読ませる
+    await stopRunningSearch();
     applyStrengthSettings();
     engine.setPositionSfen(boardToSfen(position));
-    const bestmove = await searchBestMove();
+    const bestmove = await runSearch(() => searchBestMove());
     // 合法手が無い局面ではエンジンは「(none)」を返す（実測で確認）
     if (!bestmove || bestmove === "(none)") {
       phase = "over";
@@ -1264,6 +1270,48 @@ async function searchBestMove() {
   return engine.goDepth(settings.depth);
 }
 
+// ---- エンジンの読みは、一度に1つだけ走らせる ----
+// 前の読みを走らせたまま次を頼むと、前の局面の info 行が新しい読みに混ざる。
+// そうすると別の局面の候補手が「d3e2 L@e6」のような生の記法で出たり、表示が前の局面のまま固まる。
+let runningSearch = null; // { unsubscribe: Function, pending: Promise }
+
+/**
+ * 読みを1つに保つ。走っている読みがあれば止めて、bestmove が返るまで待つ。
+ * エンジンを使う処理（検討・AIの手・合法手の取得）の前に必ず通す。
+ */
+async function stopRunningSearch() {
+  const running = runningSearch;
+  if (!running) return;
+  runningSearch = null;
+  running.unsubscribe(); // 前の読みの info 行はもう受け取らない
+  try {
+    if (engine) engine.stop(); // bestmove が返り、下の await が解ける
+  } catch (error) {
+    // 止められなくても、下の await で拾える
+  }
+  try {
+    await running.pending;
+  } catch (error) {
+    // 失敗しても、次の読みは始める
+  }
+}
+
+/**
+ * 読みを1つだけ走らせて、その結果を待つ。
+ * 走っている読みとして登録するので、次に読むときに止められる。
+ */
+async function runSearch(start, unsubscribe = () => {}) {
+  const search = { unsubscribe, pending: null };
+  runningSearch = search;
+  const pending = start();
+  search.pending = pending;
+  try {
+    return await pending;
+  } finally {
+    if (runningSearch === search) runningSearch = null;
+  }
+}
+
 /** 評価値を「点」で出す（1歩 = 100点。将棋ウォーズやぴよ将棋と同じ単位）。 */
 function formatScore(cp, sign) {
   const value = Math.round((cp * sign) / 10) * 10; // 10点単位に丸める
@@ -1292,8 +1340,20 @@ function clearAnalysis() {
   updateAnalysisPanelState();
 }
 
-function renderAnalysis(found, maxDepth) {
+/**
+ * 出せる候補手。いまの局面の合法手で始まらない読み筋は捨てる。
+ * 前の局面の読みが混ざったときに、あり得ない手を出さないための歯止め。
+ */
+function usableEntries(found) {
   const entries = [...found.values()].sort((a, b) => a.multipv - b.multipv).slice(0, STUDY_MULTI_PV);
+  const legal = Array.isArray(legalMoves) ? legalMoves : [];
+  if (legal.length === 0) return entries;
+  const known = new Set(legal);
+  return entries.filter((entry) => entry.pv.length > 0 && known.has(entry.pv[0]));
+}
+
+function renderAnalysis(found, maxDepth) {
+  const entries = usableEntries(found);
   ui.pvList.textContent = "";
 
   if (entries.length === 0) {
@@ -1336,8 +1396,23 @@ function renderAnalysis(found, maxDepth) {
 async function analyze() {
   if (!studyMode || !engine || !settings) return;
   const token = (analysisToken += 1);
+  // 前の読みが走っていたら、止めて終わるのを待つ（別の局面の読み筋が混ざらないように）
+  await stopRunningSearch();
+  if (token !== analysisToken) return; // 待っている間に、新しい頼みが来た
   const found = new Map();
-  let maxDepth = 0;
+  const progress = { depth: 0 }; // いま読めている深さ
+
+  // 読んでいる途中でも出す。ただし行きすぎないよう、少し間引いて出し直す
+  let lastRender = 0;
+  const showProgress = () => {
+    const now = performance.now();
+    if (now - lastRender < 80) return;
+    lastRender = now;
+    if (token !== analysisToken) return;
+    // 出せるものが1つも無いうちは、前の表示をそのまま残す
+    if (usableEntries(found).length === 0) return;
+    renderAnalysis(found, progress.depth);
+  };
 
   const unsubscribe = engine.subscribe((line) => {
     if (!line.startsWith("info ")) return;
@@ -1347,21 +1422,26 @@ async function analyze() {
     const depth = Number(line.match(/\bdepth (\d+)/)?.[1] ?? 0);
     const cpMatch = line.match(/\bscore cp (-?\d+)/);
     const mateMatch = line.match(/\bscore mate (-?\d+)/);
-    maxDepth = Math.max(maxDepth, depth);
+    progress.depth = Math.max(progress.depth, depth);
     found.set(multipv, {
       multipv,
       cp: cpMatch ? Number(cpMatch[1]) : null,
       mate: mateMatch ? Number(mateMatch[1]) : null,
       pv: pvMatch[1].trim().split(/\s+/),
     });
+    // 読み終わるのを待たず、1本目が届いた時点で出す
+    showProgress();
   });
 
   applyStrengthSettings();
   engine.setPositionSfen(boardToSfen(position));
   try {
-    await engine.goDepth(settings.depth);
+    // 読みは1つだけ走らせる（前の読みは runSearch の前に止めている）
+    await runSearch(() => engine.goDepth(settings.depth), unsubscribe);
   } catch (error) {
     unsubscribe();
+    if (token !== analysisToken) return;
+    ui.pvList.textContent = ""; // 前の局面の候補手を残さない
     ui.analysisSummary.textContent = `検討できませんでした: ${error.message}`;
     updateAnalysisPanelState();
     return;
@@ -1370,7 +1450,8 @@ async function analyze() {
 
   // 新しい検討が始まっていたら、古い結果は捨てる
   if (token !== analysisToken) return;
-  renderAnalysis(found, maxDepth);
+  // 読み終わりに、そろえて出す（途中で出したものと同じ内容なら見た目は変わらない）
+  renderAnalysis(found, progress.depth);
 }
 
 function maybeAnalyze() {
