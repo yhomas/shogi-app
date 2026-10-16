@@ -474,6 +474,8 @@ dialog::backdrop {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* 幅が狭いときは、知らせや保存ボタンを次の行に送って、はみ出さないようにする */
+  flex-wrap: wrap;
   padding: 10px 14px;
   background: #f6e6c8;
   border-bottom: 1px solid rgba(90, 60, 25, 0.35);
@@ -482,6 +484,13 @@ dialog::backdrop {
 .dialog-head h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+/* 保存の知らせは、保存ボタンの左側に赤字で出す（そのぶんを左から押し出す） */
+.dialog-head #settings-status {
+  margin-left: auto;
+  color: #a01010;
+  font-size: 13px;
 }
 
 dialog .settings {

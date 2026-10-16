@@ -54,16 +54,15 @@
 
   <!-- 設定を開くボタンは、検討の箱の下に置く -->
   <div class="toolbar">
-    <button id="open-strength" type="button">相手強さ</button>
+    <button id="open-strength" type="button">設定</button>
     <button id="open-check" type="button">思考チェック編集</button>
     <button id="open-kif" type="button">棋譜読込</button>
-    <button id="open-view" type="button">表示モード</button>
   </div>
 
 
 
   <dialog id="dlg-strength">
-  <div class="dialog-head"><h2>強さの設定</h2><button type="button" class="dialog-close" data-close="dlg-strength">閉じる</button></div>
+  <div class="dialog-head"><h2>設定</h2><span id="settings-status"></span><button id="settings-save" type="button">設定を保存</button><button type="button" class="dialog-close" data-close="dlg-strength">閉じる</button></div>
   <details class="settings" open>
     <summary>強さの設定</summary>
     <div class="bar">
@@ -91,15 +90,32 @@
       </div>
       <p class="hint">CPUの数を増やすと1手あたりが速くなり、記憶を増やすと読みが深くなります（重くもなります）。</p>
     </details>
+  </details>
+  <details class="settings" open>
+    <summary>表示</summary>
     <div class="bar">
-      <button id="settings-save" type="button">設定を保存</button>
+      <label for="play-mode">表示モード</label>
+      <select id="play-mode">
+      <option value="practice" selected>練習（評価値を見せない）</option>
+      <option value="study">検討（評価値と候補手を見せる）</option>
+      </select>
     </div>
-    <p class="hint" id="settings-status"></p>
-    <p class="note">
-      このエンジンは NNUE の評価ファイルを含まないため<strong>古典評価</strong>で動きます。
-      同じ深さでもネイティブ版（PC にインストールして動かす版）より弱くなります。
-      相手の強さを合わせたいときは「決まった強さにする（Elo）」を使ってください。
+  </details>
+  <details class="settings">
+    <summary>設定の持ち出し・読み込み（他の端末へ）</summary>
+    <div class="bar">
+      <button id="settings-export" type="button">書き出す</button>
+      <button id="settings-import" type="button">読み込む</button>
+      <label for="settings-file">ファイルから読み込む</label>
+      <input id="settings-file" type="file" accept=".json,application/json">
+    </div>
+    <p class="hint">
+      書き出すと、下の欄に中身が出て、ファイルも保存されます。他の端末では、そのファイルを選ぶか、
+      下の欄に貼り付けて「読み込む」を押してください。強さ・表示モード・思考チェック・グループの表示が
+      まとめて持ち出せます。
     </p>
+    <textarea id="settings-text" rows="6" placeholder="書き出した内容が出ます（ここに貼り付けても読み込めます）"></textarea>
+    <p class="hint" id="settings-transfer-status"></p>
   </details>
 </dialog>
 <dialog id="dlg-check">
@@ -171,16 +187,6 @@
     <label><input type="radio" name="newgame-side" value="w" checked> 先手（あなたが先に指す）</label>
     <label><input type="radio" name="newgame-side" value="b"> 後手（AIが先に指す）</label>
     <p><button id="newgame-start" type="button">対局を開始</button></p>
-  </div>
-</dialog>
-<dialog id="dlg-view">
-  <div class="dialog-head"><h2>表示</h2><button type="button" class="dialog-close" data-close="dlg-view">閉じる</button></div>
-  <div class="bar">
-    <label for="play-mode">表示モード</label>
-    <select id="play-mode">
-    <option value="practice" selected>練習（評価値を見せない）</option>
-    <option value="study">検討（評価値と候補手を見せる）</option>
-    </select>
   </div>
 </dialog>
 <dialog id="dlg-kif">

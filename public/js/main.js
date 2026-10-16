@@ -23,6 +23,8 @@ import { applyMove, destinationsFrom, enumerateLegalMoves, replayMoves, resolveM
 import { parseKif } from "./kif-parser.js";
 import { evaluate, loadItems, saveItems } from "./checklist.js";
 import { loadStrengthSettings, saveStrengthSettings } from "./settings.js";
+import { applyTransferText, toTransferText, transferFileName } from "./transfer.js";
+import { hasProgress, loadGame, saveGame } from "./game-store.js";
 
 const HAND_LABELS = { P: "歩", L: "香", N: "桂", S: "銀", G: "金", B: "角", R: "飛" };
 const HAND_ORDER = ["R", "B", "G", "S", "N", "L", "P"];
@@ -87,6 +89,11 @@ const ui = {
   playMode: document.getElementById("play-mode"),
   settingsSave: document.getElementById("settings-save"),
   settingsStatus: document.getElementById("settings-status"),
+  settingsExport: document.getElementById("settings-export"),
+  settingsImport: document.getElementById("settings-import"),
+  settingsFile: document.getElementById("settings-file"),
+  settingsText: document.getElementById("settings-text"),
+  settingsTransferStatus: document.getElementById("settings-transfer-status"),
   strengthHint: document.getElementById("strength-hint"),
   analysisPanel: document.getElementById("analysis-panel"),
   analysisNote: document.getElementById("analysis-note"),
@@ -119,9 +126,50 @@ const sideName = (side) => (side === "w" ? "先手" : "後手");
 // 盤の下に出す、伝えるべき文言（エラー・終局の知らせなど）。
 // 空のときは、手番の様子（AIが考えています… など）を出す。
 let messageOverride = "";
+let messageIsState = true; // 赤くしない知らせ（手番の様子と同じ色）かどうか
+let noticeTimer = null; // 一時的な知らせを消すタイマー
+let noticeShowing = false; // いま出しているのが一時的な知らせかどうか
 
 function setMessage(text) {
+  stopNoticeTimer();
+  noticeShowing = false;
   messageOverride = text;
+  messageIsState = false;
+  renderMessage();
+}
+
+function stopNoticeTimer() {
+  if (noticeTimer !== null) {
+    clearTimeout(noticeTimer);
+    noticeTimer = null;
+  }
+}
+
+/**
+ * 一時的な知らせを出す（盤面の復元など）。手番の様子と同じ色で出し、しばらくしたら戻す。
+ * @param {string} text
+ * @param {number} [ms]
+ */
+function showNotice(text, ms = 10000) {
+  stopNoticeTimer();
+  noticeShowing = true;
+  messageOverride = text;
+  messageIsState = true;
+  renderMessage();
+  noticeTimer = setTimeout(() => {
+    noticeTimer = null;
+    noticeShowing = false;
+    messageOverride = "";
+    renderMessage();
+  }, ms);
+}
+
+/** 一時的な知らせだけを消す（盤を触ったときなど）。エラーや終局の文言は消さない。 */
+function clearNotice() {
+  if (!noticeShowing) return;
+  stopNoticeTimer();
+  noticeShowing = false;
+  messageOverride = "";
   renderMessage();
 }
 
@@ -139,8 +187,8 @@ function stateMessage() {
 /** 盤の下の表示。伝えるべき文言があればそれを、無ければ手番の様子を出す。 */
 function renderMessage() {
   ui.message.textContent = messageOverride || stateMessage();
-  // 手番の様子は、赤いエラー表示と区別できる色にする
-  ui.message.classList.toggle("state", messageOverride === "");
+  // 手番の様子や一時的な知らせは、赤いエラー表示と区別できる色にする
+  ui.message.classList.toggle("state", messageOverride === "" || messageIsState);
 }
 
 function clearSelection() {
@@ -193,6 +241,8 @@ function render() {
   syncControlStates();
   renderMessage();
   updateAnalysisPanelState();
+  syncBoardFlip(); // 自分の側に合わせて盤を反転（読み込み直したときもここでそろう）
+  scheduleSaveGame(); // 盤面が変わったので、続きを復元できるように保存しておく
 }
 
 /** 戻る・進むを押せるかどうかを整える（画面の上に手番の文字は出さない）。 */
@@ -1051,6 +1101,7 @@ async function refreshLegalMoves() {
 }
 
 async function commitMove(move) {
+  clearNotice(); // 盤を触ったら、一時的な知らせ（復元しました など）は消す
   const info = moveInfoFrom(move, position);
   redoStack = []; // 新しく指したら、進める先は消える
   history.push({ position, legalMoves, lastMoveInfo, plyCount });
@@ -1232,8 +1283,8 @@ function readSettings() {
   };
 }
 
-/** 設定を画面に反映する。 */
-function writeSettings() {
+/** 設定の入力欄を、保存されている設定の状態にする（保存していない編集は捨てる）。 */
+function resetSettingsForm() {
   ui.modeDepth.checked = settings.mode === "depth";
   ui.modeElo.checked = settings.mode === "elo";
   ui.depth.value = String(settings.depth);
@@ -1243,6 +1294,12 @@ function writeSettings() {
   ui.hashMb.value = String(settings.hashMb);
   ui.multiPv.value = String(settings.multiPv);
   ui.playMode.value = studyMode ? "study" : "practice";
+  updateStrengthFields();
+}
+
+/** 設定を画面に反映する。 */
+function writeSettings() {
+  resetSettingsForm();
   ui.pvList.textContent = "";
   ui.analysisPanel.hidden = !studyMode;
   if (!studyMode) ui.analysisSummary.textContent = "";
@@ -1674,6 +1731,7 @@ function saveStudyMode() {
 }
 
 ui.settingsSave.addEventListener("click", () => {
+  // 画面で直した内容は、このボタンを押したときにまとめて反映する
   settings = readSettings();
   saveStrengthSettings(settings);
   studyMode = ui.playMode.value === "study";
@@ -1681,18 +1739,92 @@ ui.settingsSave.addEventListener("click", () => {
   writeSettings();
   setSettingsStatus("設定を保存しました。");
   applyStrengthSettings();
-  maybeAnalyze();
+  if (studyMode) {
+    maybeAnalyze();
+  } else {
+    // 練習モードにしたら、走っている検討の読みは止める
+    stopRunningSearch();
+  }
 });
 
-ui.playMode.addEventListener("change", () => {
-  studyMode = ui.playMode.value === "study";
-  saveStudyMode();
-  writeSettings();
-  setSettingsStatus(
-    studyMode ? "検討モードにしました（評価値と候補手を出します）。" : "練習モードにしました（評価値は出しません）。",
-  );
-  maybeAnalyze();
+// ---- 設定の持ち出し・読み込み（他の端末へ） ----
+
+function setTransferStatus(text) {
+  ui.settingsTransferStatus.textContent = text;
+}
+
+/** 今の設定を、文字とファイルの両方で書き出す。 */
+function exportSettings() {
+  const text = toTransferText(localStorage);
+  ui.settingsText.value = text;
+  const name = transferFileName();
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTransferStatus(`書き出しました（${name}）。下の文字をとっておけば、貼り付けるだけでも読み込めます。`);
+  } catch (error) {
+    // ファイルに保存できなくても、文字は出してあるので持ち出せる
+    setTransferStatus("書き出しました。ファイルに保存できなかったので、下の文字をコピーして持って行ってください。");
+  }
+}
+
+/** 読み込んで、画面を読み直す（設定は起動時に読むので、読み直しが確実）。 */
+function importSettings(text) {
+  const result = applyTransferText(localStorage, text);
+  if (!result.ok) {
+    setTransferStatus(result.message);
+    return;
+  }
+  setTransferStatus(`読み込みました（${result.keys.length}件）。画面を読み直します。`);
+  location.reload();
+}
+
+/** 読み込む前に、今の設定が入れ替わることを確かめる。 */
+function confirmImport() {
+  return window.confirm("今の設定を、読み込んだ内容で置き換えますか？（対局中の内容は消えて、最初からになります）");
+}
+
+ui.settingsExport.addEventListener("click", exportSettings);
+
+ui.settingsImport.addEventListener("click", () => {
+  const text = ui.settingsText.value.trim();
+  if (text === "") {
+    setTransferStatus("読み込む内容がありません。「書き出す」を押すか、他の端末で書き出した内容を貼り付けてください。");
+    return;
+  }
+  if (!confirmImport()) {
+    setTransferStatus("読み込むのをやめました。");
+    return;
+  }
+  importSettings(text);
 });
+
+ui.settingsFile.addEventListener("change", async () => {
+  const file = ui.settingsFile.files?.[0];
+  if (!file) return;
+  let text = "";
+  try {
+    text = await file.text();
+  } catch (error) {
+    setTransferStatus("ファイルを読めませんでした。");
+    return;
+  }
+  ui.settingsText.value = text;
+  ui.settingsFile.value = ""; // 同じファイルをもう一度選んでも読み込めるように
+  if (!confirmImport()) {
+    setTransferStatus("読み込むのをやめました。");
+    return;
+  }
+  importSettings(text);
+});
+
+// 表示モードは、選んだだけでは反映しない。「設定を保存」を押したときに、まとめて反映する
 
 function fillConditionSelect() {
   for (const [value, label] of CONDITION_TYPES) {
@@ -1702,6 +1834,70 @@ function fillConditionSelect() {
     ui.itemCondition.appendChild(option);
   }
 }
+
+// ---- 盤面の保存と復元 ----
+// 閉じてしまったり読み直しても続きから始められるように、盤面と履歴を保存しておく。
+
+let gameReady = false; // 復元（または新しい対局）が済むまでは保存しない
+let saveGameTimer = null;
+
+function gameSnapshot() {
+  return { mySide, plyCount, position, legalMoves, lastMoveInfo, history, redoStack };
+}
+
+function stopSaveGameTimer() {
+  if (saveGameTimer !== null) {
+    clearTimeout(saveGameTimer);
+    saveGameTimer = null;
+  }
+}
+
+/** いますぐ保存する（閉じるときなど）。 */
+function saveGameNow() {
+  if (!gameReady) return;
+  stopSaveGameTimer();
+  saveGame(localStorage, gameSnapshot());
+}
+
+/** 盤面が変わったら保存する。続けて変わるので、少し待ってからまとめて書く。 */
+function scheduleSaveGame() {
+  if (!gameReady || saveGameTimer !== null) return;
+  saveGameTimer = setTimeout(() => {
+    saveGameTimer = null;
+    saveGame(localStorage, gameSnapshot());
+  }, 300);
+}
+
+/** 保存されている盤面を読み込んで、続きから始める。保存が無ければ false。 */
+async function restoreGame() {
+  const game = loadGame(localStorage);
+  if (!game) return false;
+  mySide = game.mySide;
+  plyCount = game.plyCount;
+  position = game.position;
+  legalMoves = game.legalMoves;
+  lastMoveInfo = game.lastMoveInfo;
+  history = game.history;
+  redoStack = game.redoStack;
+  clearSelection();
+  ui.mySide.value = mySide; // 「棋譜読込」の「自分が指す側」も合わせる
+  phase = position.turn === mySide ? "human" : "thinking";
+  render();
+  if (hasProgress(game)) showNotice("前回利用した時の盤面を復元しました。");
+  if (phase === "human") {
+    showTurnChecks();
+    maybeAnalyze();
+  } else {
+    runEngineTurn(); // 相手の手番で閉じていたときは、そのまま相手に指させる
+  }
+  return true;
+}
+
+// 閉じる・隠れるときは、待たずにすぐ保存する
+window.addEventListener("pagehide", saveGameNow);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveGameNow();
+});
 
 async function boot() {
   fillConditionSelect();
@@ -1730,11 +1926,13 @@ async function boot() {
     render();
     return;
   }
-  await newGame();
+  // 前回の続きがあれば、それを復元して始める（無ければ新しい対局）
+  const restored = await restoreGame();
+  if (!restored) await newGame();
+  gameReady = true;
 }
 
 boot();
-
 // ブラウザでの動作確認用
 window.__app = {
   get phase() { return phase; },
@@ -1763,7 +1961,7 @@ window.__app = {
 
 
 // ---- 設定はボタンを押すとダイアログで開く ----
-for (const id of ["open-strength", "open-check", "open-kif", "open-view"]) {
+for (const id of ["open-strength", "open-check", "open-kif"]) {
   const button = document.getElementById(id);
   const dialog = document.getElementById(id.replace("open-", "dlg-"));
   if (!button || !dialog) continue;
@@ -1773,6 +1971,11 @@ for (const id of ["open-strength", "open-check", "open-kif", "open-view"]) {
     if (event.target === dialog) dialog.close();
   });
 }
+// 設定を開いたときは、保存されている状態から見せる（保存していない編集は捨てる）
+document.getElementById("open-strength").addEventListener("click", () => {
+  resetSettingsForm();
+  setSettingsStatus("");
+});
 document.querySelectorAll("[data-close]").forEach((button) => {
   button.addEventListener("click", () => {
     document.getElementById(button.dataset.close)?.close();
